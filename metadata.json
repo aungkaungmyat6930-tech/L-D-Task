@@ -1,0 +1,6 @@
+{
+  "name": "KBZ Life L&D Portal",
+  "description": "KBZ Life Insurance Learning & Development task, leave, training hours and team management portal with self-service user controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
