@@ -47,7 +47,8 @@ import {
   GraduationCap,
   FileCheck2,
   Building2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BellRing
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -160,6 +161,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     (item) =>
       item.attendeeIds?.includes(member.id) ||
       item.attendeeNames?.includes(member.name) ||
+      item.coTrainerIds?.includes(member.id) ||
+      item.coTrainerNames?.includes(member.name) ||
       item.trainerName === member.name
   );
 
@@ -168,6 +171,12 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     0
   );
   const totalLeaveDays = memberLeaves.reduce((acc, l) => acc + (l.duration || 0), 0);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const overdueTaskCount = memberTasks.filter(
+    (item) =>
+      item.status === 'Overdue' ||
+      (item.status !== 'Completed' && item.status !== 'Cancelled' && item.due < todayStr)
+  ).length;
   const activeTaskCount = memberTasks.filter(
     (item) => item.status === 'Active' || item.status === 'Waiting' || item.status === 'Overdue'
   ).length;
@@ -492,6 +501,14 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
               Trainer: {tr.trainerName || '-'}
             </span>
+            {tr.coTrainerNames && tr.coTrainerNames.length > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="font-semibold text-indigo-700">
+                  Co-Trainer: {tr.coTrainerNames.join(', ')}
+                </span>
+              </>
+            )}
             <span aria-hidden="true">·</span>
             <span>{tr.date}</span>
             <span aria-hidden="true">·</span>
@@ -503,6 +520,12 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               {getWeekOrdinal(getWeekOfMonth(tr.date))}
             </span>
           </div>
+          {tr.editedBy && (
+            <div className="text-[10px] font-bold text-amber-700">
+              {language === 'my' ? 'ပြင်ဆင်သူ:' : 'Edited by:'} {tr.editedBy}
+              {tr.editedAt ? ` (${tr.editedAt})` : ''}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
@@ -981,6 +1004,22 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
                     {member.name}
                   </h3>
+                  {overdueTaskCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubtab('tasks')}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500 hover:bg-red-400 text-white text-[10px] font-extrabold shadow-sm transition tabular-nums"
+                      title={
+                        language === 'my'
+                          ? `${member.name} တွင် Overdue Task ${overdueTaskCount} ခု ရှိပါသည်`
+                          : `${member.name} has ${overdueTaskCount} overdue task(s)`
+                      }
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
+                      <BellRing className="w-3 h-3" />
+                      <span>{overdueTaskCount} Overdue</span>
+                    </button>
+                  )}
                   <span className="text-[11px] font-bold text-amber-300">
                     {member.roleTier}
                     {isMe ? ` · ${language === 'my' ? 'သင့်အကောင့်' : 'You'}` : ''}
@@ -1094,7 +1133,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               <div className="text-xl font-black tabular-nums mt-0.5">
                 {memberTasks.length}
                 <span className="text-[11px] font-semibold opacity-80 ml-1.5">
-                  ({activeTaskCount} active)
+                  ({activeTaskCount} active{overdueTaskCount > 0 ? `, ${overdueTaskCount} overdue` : ''})
                 </span>
               </div>
             </button>

@@ -1,23 +1,28 @@
 import React, { useState } from 'react';
-import { LeaveRequest, UserProfile } from '../types';
+import {
+  LeaveRequest,
+  UserProfile,
+  TaskItem,
+  TrainingLog,
+  AttendanceRecord,
+  AttendanceOverrideStatus,
+} from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { 
   CalendarDays, 
   Plus, 
   Edit3, 
   Trash2, 
-  Check, 
-  X, 
-  Clock, 
-  CheckCircle2, 
-  AlertCircle,
-  Search,
-  ShieldCheck
+  Search
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { TrainingTeamAttendanceMatrix } from './TrainingTeamAttendanceMatrix';
 
 interface LeaveTabProps {
   leaves: LeaveRequest[];
+  tasks: TaskItem[];
+  trainingLogs: TrainingLog[];
+  attendanceOverrides: AttendanceRecord[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onOpenAddLeave: (targetMember?: UserProfile) => void;
@@ -27,11 +32,20 @@ interface LeaveTabProps {
   onOpenEditLeave: (leave: LeaveRequest) => void;
   onDeleteLeave: (leaveId: string) => void;
   onApproveLeave: (leaveId: string, status: 'Approved' | 'Rejected') => void;
+  onSetAttendanceOverride: (
+    memberId: string,
+    date: string,
+    status: AttendanceOverrideStatus | null,
+    note?: string
+  ) => void;
   language: Language;
 }
 
 export const LeaveTab: React.FC<LeaveTabProps> = ({
   leaves,
+  tasks,
+  trainingLogs,
+  attendanceOverrides,
   currentUser,
   allUsers,
   onOpenAddLeave,
@@ -39,6 +53,7 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
   onOpenEditLeave,
   onDeleteLeave,
   onApproveLeave,
+  onSetAttendanceOverride,
   language,
 }) => {
   const t = TRANSLATIONS[language];
@@ -340,6 +355,20 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Training Team Attendance Matrix directly under Leave Request */}
+      <TrainingTeamAttendanceMatrix
+        allUsers={allUsers}
+        currentUser={currentUser}
+        tasks={tasks}
+        leaves={leaves}
+        trainingLogs={trainingLogs}
+        attendanceOverrides={attendanceOverrides}
+        onSetAttendanceOverride={onSetAttendanceOverride}
+        onOpenMemberSheet={onOpenMemberSheet}
+        language={language}
+        showControls
+      />
 
       <ConfirmModal
         isOpen={!!leaveToDelete}

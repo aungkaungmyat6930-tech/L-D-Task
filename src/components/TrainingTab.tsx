@@ -54,11 +54,11 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
   const [qStart, setQStart] = useState('09:00');
   const [qEnd, setQEnd] = useState('17:00');
   const [qBreak, setQBreak] = useState(1.0);
-  const [qAttendees, setQAttendees] = useState<string[]>([currentUser.id]);
+  const [qCoTrainers, setQCoTrainers] = useState<string[]>([]);
 
   useEffect(() => {
     setQTrainer(currentUser.name);
-    setQAttendees([currentUser.id]);
+    setQCoTrainers([]);
   }, [currentUser.id, currentUser.name]);
 
   const isAdmin = currentUser.roleTier === 'ADMIN';
@@ -79,7 +79,16 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
     e.preventDefault();
     if (!qName.trim()) return;
 
-    const attendees = allUsers.filter((u) => qAttendees.includes(u.id));
+    const finalTrainer = qTrainer.trim() || currentUser.name;
+    const trainerUser = allUsers.find((u) => u.name === finalTrainer);
+    const coTrainers = allUsers.filter((u) => qCoTrainers.includes(u.id));
+
+    const combinedIds = Array.from(
+      new Set([...(trainerUser ? [trainerUser.id] : []), ...qCoTrainers])
+    );
+    const combinedNames = Array.from(
+      new Set([finalTrainer, ...coTrainers.map((u) => u.name)])
+    );
 
     onQuickSaveTraining({
       name: qName.trim(),
@@ -88,19 +97,25 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
       end: qEnd,
       breakHrs: Number(qBreak) || 0,
       calculatedHours,
-      attendeeIds: qAttendees,
-      attendeeNames: attendees.map((u) => u.name),
-      trainerName: qTrainer.trim() || currentUser.name,
+      coTrainerIds: qCoTrainers,
+      coTrainerNames: coTrainers.map((u) => u.name),
+      attendeeIds: combinedIds,
+      attendeeNames: combinedNames,
+      trainerName: finalTrainer,
     });
 
     setQName('');
+    setQCoTrainers([]);
   };
 
   const filteredLogs = trainingLogs.filter((tr) => {
     if (filter === 'my') {
       const isMine =
         tr.attendeeIds?.includes(currentUser.id) ||
-        tr.attendeeNames?.includes(currentUser.name);
+        tr.attendeeNames?.includes(currentUser.name) ||
+        tr.coTrainerIds?.includes(currentUser.id) ||
+        tr.coTrainerNames?.includes(currentUser.name) ||
+        tr.trainerName === currentUser.name;
       if (!isMine) return false;
     }
 
@@ -109,7 +124,9 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
       return (
         tr.name.toLowerCase().includes(q) ||
         (tr.trainerName && tr.trainerName.toLowerCase().includes(q)) ||
-        (tr.attendeeNames && tr.attendeeNames.some((n) => n.toLowerCase().includes(q)))
+        (tr.coTrainerNames && tr.coTrainerNames.some((n) => n.toLowerCase().includes(q))) ||
+        (tr.attendeeNames && tr.attendeeNames.some((n) => n.toLowerCase().includes(q))) ||
+        (tr.editedBy && tr.editedBy.toLowerCase().includes(q))
       );
     }
     return true;
@@ -263,13 +280,13 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  {t.attendees}
+                  {t.coTrainer}
                 </label>
                 <div className="space-y-1 max-h-24 overflow-y-auto p-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                   {allUsers
                     .filter((u) => u.roleTier !== 'VIEWER')
                     .map((u) => {
-                      const isSel = qAttendees.includes(u.id);
+                      const isSel = qCoTrainers.includes(u.id);
                       return (
                         <label
                           key={u.id}
@@ -279,7 +296,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                             type="checkbox"
                             checked={isSel}
                             onChange={() =>
-                              setQAttendees((prev) =>
+                              setQCoTrainers((prev) =>
                                 prev.includes(u.id)
                                   ? prev.filter((id) => id !== u.id)
                                   : [...prev, u.id]
@@ -367,7 +384,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                   <th className="py-3 px-3">Timing</th>
                   <th className="py-3 px-3">Break</th>
                   <th className="py-3 px-3">Hours</th>
-                  <th className="py-3 px-3">Attendees</th>
+                  <th className="py-3 px-3">Co-Trainer</th>
                   <th className="py-3 px-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -382,8 +399,16 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                   filteredLogs.map((log) => {
                     const isMyLog =
                       log.attendeeIds?.includes(currentUser.id) ||
-                      log.attendeeNames?.includes(currentUser.name);
-                    const canEdit = (isMyLog || isAdmin) && !isViewer;
+                      log.attendeeNames?.includes(currentUser.name) ||
+                      log.coTrainerIds?.includes(currentUser.id) ||
+                      log.coTrainerNames?.includes(currentUser.name) ||
+                      log.trainerName === currentUser.name;
+                    const canEdit = !isViewer;
+                    const canDelete = (isMyLog || isAdmin) && !isViewer;
+                    const displayCoTrainers =
+                      log.coTrainerNames && log.coTrainerNames.length > 0
+                        ? log.coTrainerNames
+                        : (log.attendeeNames || []).filter((n) => n !== log.trainerName);
 
                     return (
                       <tr
@@ -393,7 +418,19 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                         }`}
                       >
                         <td className="py-3 px-3 font-semibold text-slate-900 max-w-xs">
-                          {log.name}
+                          <div>{log.name}</div>
+                          {log.editedBy && (
+                            <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                              <span>
+                                {language === 'my' ? 'ပြင်ဆင်သူ:' : 'Edited by:'} {log.editedBy}
+                              </span>
+                              {log.editedAt && (
+                                <span className="text-amber-600 tabular-nums">
+                                  · {log.editedAt}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-3 font-semibold text-purple-900">
                           {log.trainerName || '-'}
@@ -412,9 +449,9 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                         </td>
                         <td className="py-3 px-3 text-slate-700">
                           <div className="flex flex-wrap gap-1">
-                            {log.attendeeNames && log.attendeeNames.length > 0 ? (
-                              log.attendeeNames.map((attName, idx) => {
-                                const found = allUsers.find((u) => u.name === attName);
+                            {displayCoTrainers.length > 0 ? (
+                              displayCoTrainers.map((coName, idx) => {
+                                const found = allUsers.find((u) => u.name === coName);
                                 return (
                                   <button
                                     key={idx}
@@ -423,9 +460,9 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                                       if (found) onOpenMemberSheet(found);
                                     }}
                                     className="bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 px-1.5 py-0.5 rounded text-[11px] font-semibold transition"
-                                    title={`Open sheet for ${attName}`}
+                                    title={`Open sheet for ${coName}`}
                                   >
-                                    {attName}
+                                    {coName}
                                   </button>
                                 );
                               })
@@ -444,13 +481,15 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={() => setLogToDelete(log)}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded"
-                                title={t.delete}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  onClick={() => setLogToDelete(log)}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  title={t.delete}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <span className="text-slate-400 text-[10px]">-</span>

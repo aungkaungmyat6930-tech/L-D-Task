@@ -3,23 +3,17 @@ import {
   TaskItem,
   UserProfile,
   LeaveRequest,
-  TrainingLog,
-  AttendanceRecord,
-  AttendanceOverrideStatus,
 } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import {
   WeekNumber,
   getWeekOfMonth,
   getWeeksInMonth,
-  getWeekLabel,
   getWeekOrdinal,
   getWeekDayRange,
   shiftMonth,
-  formatMonthLabel,
   getDefaultDateForMonthWeek,
 } from '../utils/weekHelpers';
-import { computeMemberMonthlyAttendance, ComputedDayStatus } from '../utils/attendanceHelpers';
 import {
   Calendar,
   MessageSquare,
@@ -28,21 +22,19 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Building2,
   CalendarDays,
   CheckCircle2,
   XCircle,
   Clock4,
   FileCheck2,
-  Users,
+  CheckSquare,
+  AlertTriangle,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
 interface WeeklyBoardTabProps {
   tasks: TaskItem[];
   leaves: LeaveRequest[];
-  trainingLogs: TrainingLog[];
-  attendanceOverrides: AttendanceRecord[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onOpenAddTask: (targetMember?: UserProfile, defaultDate?: string) => void;
@@ -52,12 +44,6 @@ interface WeeklyBoardTabProps {
   onOpenEditLeave: (leave: LeaveRequest) => void;
   onApproveLeave: (leaveId: string, status: 'Approved' | 'Rejected') => void;
   onDeleteLeave: (leaveId: string) => void;
-  onSetAttendanceOverride: (
-    memberId: string,
-    date: string,
-    status: AttendanceOverrideStatus | null,
-    note?: string
-  ) => void;
   onOpenMemberSheet: (member: UserProfile) => void;
   onOpenComments: (task: TaskItem) => void;
   language: Language;
@@ -66,8 +52,6 @@ interface WeeklyBoardTabProps {
 export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
   tasks,
   leaves,
-  trainingLogs,
-  attendanceOverrides,
   currentUser,
   allUsers,
   onOpenAddTask,
@@ -77,7 +61,6 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
   onOpenEditLeave,
   onApproveLeave,
   onDeleteLeave,
-  onSetAttendanceOverride,
   onOpenMemberSheet,
   onOpenComments,
   language,
@@ -89,7 +72,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedMonth, setSelectedMonth] = useState<string>(() => todayStr.slice(0, 7));
   const [selectedWeek, setSelectedWeek] = useState<WeekNumber>(() => getWeekOfMonth(todayStr));
-  const [viewMode, setViewMode] = useState<'all' | 'attendance' | 'tasks'>('all');
+  const [viewMode, setViewMode] = useState<'all' | 'leaves' | 'tasks'>('all');
   const [leaveFilter, setLeaveFilter] = useState<'focus' | 'pending' | 'all'>('focus');
   const [taskScope, setTaskScope] = useState<'all' | 'week'>('all');
 
@@ -98,37 +81,6 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
   const weeksInMonth = getWeeksInMonth(selectedMonth);
   const safeWeek: WeekNumber = weeksInMonth.includes(selectedWeek) ? selectedWeek : 1;
-
-  const teamMembers = useMemo(
-    () => allUsers.filter((u) => u.roleTier !== 'VIEWER' && u.status !== 'Resigned'),
-    [allUsers]
-  );
-
-  // Compute monthly attendance for every training team member
-  const memberSummaries = useMemo(() => {
-    return teamMembers.map((member) => ({
-      member,
-      summary: computeMemberMonthlyAttendance(
-        member,
-        selectedMonth,
-        leaves,
-        trainingLogs,
-        tasks,
-        attendanceOverrides
-      ),
-    }));
-  }, [teamMembers, selectedMonth, leaves, trainingLogs, tasks, attendanceOverrides]);
-
-  // Days in the selected week
-  const weekDays = useMemo(() => {
-    const first = memberSummaries[0]?.summary.dailyRows.filter((r) => r.week === safeWeek) || [];
-    return first.map((r) => ({
-      date: r.date,
-      dayNum: r.dayNum,
-      weekday: r.weekday,
-      isWeekend: r.isWeekend,
-    }));
-  }, [memberSummaries, safeWeek]);
 
   const { startDay, endDay } = getWeekDayRange(selectedMonth, safeWeek);
   const weekStartStr = `${selectedMonth}-${String(startDay).padStart(2, '0')}`;
@@ -152,74 +104,6 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
     return Array.from(map.values());
   }, [leaveFilter, pendingLeaves, weekOverlappingLeaves, leaves]);
 
-  // Weekly totals for KPI strip
-  const weekStats = useMemo(() => {
-    let presentCount = 0;
-    let trainingCount = 0;
-    let approvedLeaveCount = 0;
-
-    memberSummaries.forEach(({ summary }) => {
-      summary.dailyRows
-        .filter((r) => r.week === safeWeek)
-        .forEach((r) => {
-          if (r.status === 'Office' || r.status === 'WFH' || r.status === 'Training') {
-            presentCount += 1;
-          }
-          if (r.status === 'Training') trainingCount += 1;
-          if (r.status === 'LeaveApproved') approvedLeaveCount += 1;
-        });
-    });
-
-    return {
-      presentCount,
-      trainingCount,
-      approvedLeaveCount,
-      pendingCount: pendingLeaves.length,
-    };
-  }, [memberSummaries, safeWeek, pendingLeaves.length]);
-
-  const getCellStyle = (status: ComputedDayStatus) => {
-    switch (status) {
-      case 'Office':
-        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'WFH':
-        return 'bg-sky-50 text-sky-800 border-sky-200';
-      case 'Training':
-        return 'bg-purple-50 text-purple-800 border-purple-200';
-      case 'LeaveApproved':
-        return 'bg-teal-100 text-teal-900 border-teal-300 font-bold';
-      case 'LeavePending':
-        return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-      case 'Holiday':
-        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
-      case 'Absent':
-        return 'bg-red-100 text-red-800 border-red-300 font-bold';
-      case 'Weekend':
-        return 'bg-slate-100 text-slate-500 border-slate-200';
-    }
-  };
-
-  const getStatusShortLabel = (status: ComputedDayStatus) => {
-    switch (status) {
-      case 'Office':
-        return language === 'my' ? 'ရုံးတက်' : 'Office';
-      case 'WFH':
-        return 'WFH';
-      case 'Training':
-        return language === 'my' ? 'သင်တန်း' : 'Training';
-      case 'LeaveApproved':
-        return language === 'my' ? 'ခွင့် (OK)' : 'Leave';
-      case 'LeavePending':
-        return language === 'my' ? 'ခွင့် (Pending)' : 'Pending';
-      case 'Holiday':
-        return language === 'my' ? 'ပိတ်ရက်' : 'Holiday';
-      case 'Absent':
-        return language === 'my' ? 'ပျက်ကွက်' : 'Absent';
-      case 'Weekend':
-        return language === 'my' ? 'ပိတ်ရက်' : 'Wknd';
-    }
-  };
-
   const days: Array<{ code: TaskItem['day']; labelEn: string; labelMy: string }> = [
     { code: 'Mon', labelEn: 'Monday', labelMy: 'တနင်္လာ' },
     { code: 'Tue', labelEn: 'Tuesday', labelMy: 'အင်္ဂါ' },
@@ -235,6 +119,23 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
     return tasks.filter((item) => item.due >= weekStartStr && item.due <= weekEndStr);
   }, [tasks, taskScope, weekStartStr, weekEndStr]);
 
+  const weeklySummaryStats = useMemo(() => {
+    const weekTasks = tasks.filter((item) => item.due >= weekStartStr && item.due <= weekEndStr);
+    const activeTasks = scopedTasks.filter((item) => item.status === 'Active' || item.status === 'Waiting').length;
+    const completedTasks = scopedTasks.filter((item) => item.status === 'Completed').length;
+    const overdueTasks = scopedTasks.filter((item) => item.status === 'Overdue').length;
+    const approvedWeekLeaves = weekOverlappingLeaves.filter((l) => l.status === 'Approved').length;
+    return {
+      totalScoped: scopedTasks.length,
+      weekTasksCount: weekTasks.length,
+      activeTasks,
+      completedTasks,
+      overdueTasks,
+      approvedWeekLeaves,
+      pendingCount: pendingLeaves.length,
+    };
+  }, [tasks, scopedTasks, weekStartStr, weekEndStr, weekOverlappingLeaves, pendingLeaves.length]);
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Top Weekly Command Bar */}
@@ -245,14 +146,14 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
               <Calendar className="w-5 h-5 text-blue-600" />
               <span>
                 {language === 'my'
-                  ? 'အပတ်စဉ် Training Team တက်ရောက်မှု၊ ခွင့်အတည်ပြုမှုနှင့် လုပ်ငန်းခွင်ဇယား'
-                  : 'Weekly Training Team Attendance, Leave Approvals & Workload Board'}
+                  ? 'အပတ်စဉ် ခွင့်အတည်ပြုမှုနှင့် လုပ်ငန်းခွင်ဇယား (Weekly Board)'
+                  : 'Weekly Leave Approvals & Workload Board'}
               </span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {language === 'my'
-                ? 'အပတ်စဉ်အလိုက် ဝန်ထမ်းများ၏ ရုံးတက်/သင်တန်း/ခွင့် အခြေအနေများ၊ ခွင့်တောင်းခံလွှာ Approve/Reject ပြုလုပ်ခြင်းနှင့် Mon–Sun Task များကို တစ်နေရာတည်းတွင် စီမံနိုင်သည်'
-                : 'Track daily team attendance, approve or review leave requests, and manage Monday–Sunday tasks'}
+                ? 'အပတ်စဉ်အလိုက် ခွင့်တောင်းခံလွှာ Approve/Reject ပြုလုပ်ခြင်းနှင့် Mon–Sun Task များကို တစ်နေရာတည်းတွင် စီမံနိုင်သည်'
+                : 'Approve or review leave requests and manage Monday–Sunday team tasks'}
             </p>
           </div>
 
@@ -349,12 +250,12 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setViewMode('attendance')}
+              onClick={() => setViewMode('leaves')}
               className={`px-3 py-1 rounded-lg transition ${
-                viewMode === 'attendance' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600'
+                viewMode === 'leaves' ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600'
               }`}
             >
-              {language === 'my' ? 'Attendance & ခွင့်' : 'Attendance & Leave'}
+              {language === 'my' ? 'ခွင့်အတည်ပြုမှုများ' : 'Leave Approvals'}
             </button>
             <button
               type="button"
@@ -370,33 +271,52 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
         {/* 4 Summary Tiles for Selected Week */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
             <div>
-              <span className="text-[11px] font-bold text-slate-500 block">
-                {language === 'my' ? 'Training Team ဝန်ထမ်း' : 'Active Training Team'}
+              <span className="text-[11px] font-bold text-blue-700 block">
+                {language === 'my' ? 'စုစုပေါင်း Task များ' : 'Scoped Tasks'}
               </span>
-              <span className="text-lg font-black text-slate-900 tabular-nums">
-                {teamMembers.length}
-              </span>
-            </div>
-            <Users className="w-5 h-5 text-slate-400" />
-          </div>
-
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
-            <div>
-              <span className="text-[11px] font-bold text-emerald-700 block">
-                {language === 'my'
-                  ? `${getWeekOrdinal(safeWeek)} ရုံးတက်/သင်တန်း`
-                  : `${getWeekOrdinal(safeWeek)} Present Days`}
-              </span>
-              <span className="text-lg font-black text-emerald-900 tabular-nums">
-                {weekStats.presentCount}{' '}
-                <span className="text-xs font-semibold text-purple-700">
-                  ({weekStats.trainingCount} {language === 'my' ? 'သင်တန်း' : 'training'})
+              <span className="text-lg font-black text-blue-950 tabular-nums">
+                {weeklySummaryStats.totalScoped}{' '}
+                <span className="text-xs font-semibold text-blue-700">
+                  ({weeklySummaryStats.activeTasks} active)
                 </span>
               </span>
             </div>
-            <Building2 className="w-5 h-5 text-emerald-600" />
+            <CheckSquare className="w-5 h-5 text-blue-600" />
+          </div>
+
+          <div
+            className={`rounded-xl px-4 py-2.5 flex items-center justify-between border ${
+              weeklySummaryStats.overdueTasks > 0
+                ? 'bg-red-50 border-red-200'
+                : 'bg-emerald-50 border-emerald-200'
+            }`}
+          >
+            <div>
+              <span
+                className={`text-[11px] font-bold block ${
+                  weeklySummaryStats.overdueTasks > 0 ? 'text-red-700' : 'text-emerald-700'
+                }`}
+              >
+                {language === 'my' ? 'ပြီးစီး / ရက်ကျော် Task' : 'Completed / Overdue'}
+              </span>
+              <span className="text-lg font-black text-slate-900 tabular-nums">
+                {weeklySummaryStats.completedTasks}{' '}
+                <span
+                  className={`text-xs font-semibold ${
+                    weeklySummaryStats.overdueTasks > 0 ? 'text-red-700' : 'text-emerald-700'
+                  }`}
+                >
+                  / {weeklySummaryStats.overdueTasks} {language === 'my' ? 'ကျော်' : 'overdue'}
+                </span>
+              </span>
+            </div>
+            {weeklySummaryStats.overdueTasks > 0 ? (
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            )}
           </div>
 
           <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
@@ -407,7 +327,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
               <span className="text-lg font-black text-teal-900 tabular-nums">
                 {weekOverlappingLeaves.length}{' '}
                 <span className="text-xs font-semibold opacity-80">
-                  ({weekStats.approvedLeaveCount}d approved)
+                  ({weeklySummaryStats.approvedWeekLeaves} approved)
                 </span>
               </span>
             </div>
@@ -416,7 +336,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
           <div
             className={`rounded-xl px-4 py-2.5 flex items-center justify-between border ${
-              weekStats.pendingCount > 0
+              weeklySummaryStats.pendingCount > 0
                 ? 'bg-amber-50 border-amber-300'
                 : 'bg-slate-50 border-slate-200'
             }`}
@@ -424,32 +344,31 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
             <div>
               <span
                 className={`text-[11px] font-bold block ${
-                  weekStats.pendingCount > 0 ? 'text-amber-800' : 'text-slate-500'
+                  weeklySummaryStats.pendingCount > 0 ? 'text-amber-800' : 'text-slate-500'
                 }`}
               >
                 {language === 'my' ? 'ခွင့် Approve စောင့်ဆိုင်းဆဲ' : 'Pending Leave Approvals'}
               </span>
               <span
                 className={`text-lg font-black tabular-nums ${
-                  weekStats.pendingCount > 0 ? 'text-amber-900' : 'text-slate-900'
+                  weeklySummaryStats.pendingCount > 0 ? 'text-amber-900' : 'text-slate-900'
                 }`}
               >
-                {weekStats.pendingCount}
+                {weeklySummaryStats.pendingCount}
               </span>
             </div>
             <Clock4
               className={`w-5 h-5 ${
-                weekStats.pendingCount > 0 ? 'text-amber-600' : 'text-slate-400'
+                weeklySummaryStats.pendingCount > 0 ? 'text-amber-600' : 'text-slate-400'
               }`}
             />
           </div>
         </div>
       </div>
 
-      {/* SECTION 1: Training Team Weekly Attendance Matrix + Leave Approvals */}
+      {/* SECTION 1: Leave Approvals & Requests */}
       {viewMode !== 'tasks' && (
         <div className="space-y-6">
-          {/* 1A. Leave Approval & Leave Taken Panel */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -643,180 +562,11 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
               )}
             </div>
           </div>
-
-          {/* 1B. Training Team Weekly Attendance Matrix */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-emerald-400" />
-                  <span>
-                    {language === 'my'
-                      ? `Training Team အပတ်စဉ် တက်ရောက်မှု ဇယား — ${formatMonthLabel(selectedMonth, language)} · ${getWeekLabel(selectedMonth, safeWeek, language)}`
-                      : `Training Team Attendance Matrix — ${formatMonthLabel(selectedMonth, language)} · ${getWeekLabel(selectedMonth, safeWeek, language)}`}
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-300 mt-0.5">
-                  {language === 'my'
-                    ? 'နေ့ရက်အလိုက် ရုံးတက်၊ WFH၊ သင်တန်း၊ ခွင့်ရက်များကို ပြသထားပြီး Admin/ကိုယ်တိုင်က တိုက်ရိုက်ပြင်ဆင်နိုင်ပါသည်'
-                    : 'Daily attendance across Office, WFH, Training, and Leaves (click cell status to override or adjust)'}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
-                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
-                  {language === 'my' ? 'ရုံးတက်' : 'Office'}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-400/30">
-                  {language === 'my' ? 'သင်တန်း' : 'Training'}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-200 border border-teal-400/30">
-                  {language === 'my' ? 'ခွင့် (Approved)' : 'Approved Leave'}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-400/30">
-                  {language === 'my' ? 'ခွင့် (Pending)' : 'Pending Leave'}
-                </span>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700">
-                  <tr>
-                    <th className="p-3 font-extrabold min-w-[180px] sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
-                      {language === 'my' ? 'Training Team အဖွဲ့ဝင်' : 'Team Member'}
-                    </th>
-                    {weekDays.map((wd) => (
-                      <th key={wd.date} className="p-2.5 text-center min-w-[112px]">
-                        <div className="font-extrabold text-slate-900">{wd.weekday}</div>
-                        <div className="text-[10px] text-slate-500 tabular-nums font-semibold">
-                          {wd.date.slice(5)}
-                        </div>
-                      </th>
-                    ))}
-                    <th className="p-3 text-center font-extrabold min-w-[100px] border-l border-slate-200 bg-slate-50">
-                      {language === 'my' ? 'အပတ်ချုပ်' : 'Week Total'}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {memberSummaries.map(({ member, summary }) => {
-                    const weekRows = summary.dailyRows.filter((r) => r.week === safeWeek);
-                    const wkOffice = weekRows.filter(
-                      (r) => r.status === 'Office' || r.status === 'WFH' || r.status === 'Training'
-                    ).length;
-                    const wkLeave = weekRows.filter(
-                      (r) => r.status === 'LeaveApproved' || r.status === 'LeavePending'
-                    ).length;
-                    const isMe = member.id === currentUser.id || member.name === currentUser.name;
-                    const canEditRow = (isMe || isAdmin) && !isViewer;
-
-                    return (
-                      <tr key={member.id} className="hover:bg-slate-50/70 transition">
-                        <td className="p-3 sticky left-0 bg-white z-10 border-r border-slate-200">
-                          <button
-                            type="button"
-                            onClick={() => onOpenMemberSheet(member)}
-                            className="flex items-center gap-2.5 text-left group"
-                          >
-                            <img
-                              src={member.avatar}
-                              alt={member.name}
-                              referrerPolicy="no-referrer"
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <span className="block font-bold text-slate-900 group-hover:text-blue-600 group-hover:underline truncate">
-                                {member.name}
-                              </span>
-                              <span className="block text-[10px] text-slate-500 truncate">
-                                {member.roleLabel}
-                              </span>
-                            </div>
-                          </button>
-                        </td>
-
-                        {weekRows.map((row) => {
-                          const cellCls = getCellStyle(row.status);
-                          const titleTip = [
-                            row.date,
-                            getStatusShortLabel(row.status),
-                            row.leave ? `${row.leave.type} (${row.leave.status})` : '',
-                            row.trainingSessions.length > 0
-                              ? `Training: ${row.trainingSessions.map((tr) => tr.name).join(', ')}`
-                              : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' · ');
-
-                          return (
-                            <td key={row.date} className="p-1.5 text-center align-middle" title={titleTip}>
-                              {canEditRow ? (
-                                <select
-                                  value={row.overrideStatus || 'AUTO'}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    onSetAttendanceOverride(
-                                      member.id,
-                                      row.date,
-                                      val === 'AUTO' ? null : (val as AttendanceOverrideStatus)
-                                    );
-                                  }}
-                                  className={`w-full text-[11px] font-semibold px-1.5 py-1.5 rounded-lg border text-center cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${cellCls}`}
-                                >
-                                  <option value="AUTO">
-                                    {getStatusShortLabel(row.status)}
-                                  </option>
-                                  <option value="Office">
-                                    {language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}
-                                  </option>
-                                  <option value="WFH">WFH</option>
-                                  <option value="Training">
-                                    {language === 'my' ? 'သင်တန်း' : 'Training'}
-                                  </option>
-                                  <option value="Holiday">
-                                    {language === 'my' ? 'ပိတ်ရက်' : 'Holiday'}
-                                  </option>
-                                  <option value="Absent">
-                                    {language === 'my' ? 'ပျက်ကွက်' : 'Absent'}
-                                  </option>
-                                </select>
-                              ) : (
-                                <span
-                                  className={`inline-block w-full text-[11px] px-1.5 py-1.5 rounded-lg border ${cellCls}`}
-                                >
-                                  {getStatusShortLabel(row.status)}
-                                </span>
-                              )}
-
-                              {row.trainingSessions.length > 0 && (
-                                <div className="text-[9px] text-purple-700 font-semibold truncate max-w-[100px] mx-auto mt-0.5">
-                                  {row.trainingSessions[0].name}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-
-                        <td className="p-2.5 text-center border-l border-slate-200 tabular-nums">
-                          <div className="text-[11px] font-extrabold text-emerald-700">
-                            {wkOffice}d {language === 'my' ? 'တက်' : 'in'}
-                          </div>
-                          <div className="text-[10px] font-bold text-teal-700">
-                            {wkLeave}d {language === 'my' ? 'ခွင့်' : 'leave'}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       )}
 
       {/* SECTION 2: Weekly Tasks Kanban (Monday - Sunday) */}
-      {viewMode !== 'attendance' && (
+      {viewMode !== 'leaves' && (
         <div className="space-y-3">
           <div className="bg-white px-5 py-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-3">
             <div>

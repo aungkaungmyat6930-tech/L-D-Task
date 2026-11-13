@@ -81,11 +81,15 @@ export interface TrainingLog {
   breakHrs: number;
   calculatedHours: number;
   trainerName?: string;
+  coTrainerNames?: string[];
+  coTrainerIds?: string[];
   attendeeNames: string[];
   attendeeIds: string[];
   location?: string;
   notes?: string;
   createdAt: string;
+  editedBy?: string;
+  editedAt?: string;
 }
 
 export interface StrategicProject {

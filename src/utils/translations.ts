@@ -16,7 +16,7 @@ export const TRANSLATIONS = {
     
     // Tabs
     tabDirectory: 'Team Directory & Sheets',
-    tabWeekly: 'Weekly Board & Attendance',
+    tabWeekly: 'Weekly Board',
     tabTasks: 'Task Management',
     tabLeave: 'Leave Requests',
     tabTraining: 'Training Hours',
@@ -93,7 +93,9 @@ export const TRANSLATIONS = {
     breakHours: 'Break Duration (Hours)',
     calculatedHours: 'Calculated Training Hours',
     formulaNote: 'Formula: (End Time - Start Time) - Break Time',
-    attendees: 'Attendees (Staff Members)',
+    attendees: 'Co-Trainer (Team Members)',
+    coTrainer: 'Co-Trainer',
+    editedBy: 'Last Edited By',
     trainerName: 'Trainer / Facilitator',
     saveTraining: 'Save Training Log',
 
@@ -118,7 +120,7 @@ export const TRANSLATIONS = {
 
     // Tabs
     tabDirectory: 'အဖွဲ့ဝင်များနှင့် ကိုယ်ပိုင်မှတ်တမ်းများ',
-    tabWeekly: 'အပတ်စဉ် တက်ရောက်မှု/ခွင့်/Task',
+    tabWeekly: 'အပတ်စဉ် လုပ်ငန်းခွင်ဇယား (Weekly Board)',
     tabTasks: 'လုပ်ငန်းတာဝန်များ (Tasks)',
     tabLeave: 'ခွင့်ရက်မှတ်တမ်းများ (Leaves)',
     tabTraining: 'သင်တန်းနာရီများ (Training Hours)',
@@ -195,7 +197,9 @@ export const TRANSLATIONS = {
     breakHours: 'အနားယူချိန် နာရီ (Break Hours)',
     calculatedHours: 'တွက်ချက်ရရှိသော သင်တန်းနာရီ',
     formulaNote: 'တွက်ချက်ပုံသေနည်း - (ပြီးဆုံးချိန် - စတင်ချိန်) - အနားယူချိန်',
-    attendees: 'တက်ရောက်သူ ဝန်ထမ်းများ',
+    attendees: 'တွဲဖက်သင်တန်းဆရာ (Co-Trainer)',
+    coTrainer: 'တွဲဖက်သင်တန်းဆရာ (Co-Trainer)',
+    editedBy: 'ပြင်ဆင်သူ',
     trainerName: 'သင်တန်းဆရာ / Facilitator',
     saveTraining: 'သင်တန်းမှတ်တမ်း သိမ်းဆည်းရန်',
 

@@ -45,7 +45,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
   const [end, setEnd] = useState('17:00');
   const [breakHrs, setBreakHrs] = useState(1.0);
   const [trainerName, setTrainerName] = useState('');
-  const [attendeeIds, setAttendeeIds] = useState<string[]>([currentUser.id]);
+  const [coTrainerIds, setCoTrainerIds] = useState<string[]>([]);
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -57,7 +57,13 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
       setEnd(trainingToEdit.end);
       setBreakHrs(trainingToEdit.breakHrs);
       setTrainerName(trainingToEdit.trainerName || '');
-      setAttendeeIds(trainingToEdit.attendeeIds || [targetMember ? targetMember.id : currentUser.id]);
+      const existingCoIds =
+        trainingToEdit.coTrainerIds ??
+        (trainingToEdit.attendeeIds || []).filter((id) => {
+          const u = allUsers.find((usr) => usr.id === id);
+          return u && u.name !== trainingToEdit.trainerName;
+        });
+      setCoTrainerIds(existingCoIds);
       setLocation(trainingToEdit.location || '');
       setNotes(trainingToEdit.notes || '');
     } else {
@@ -67,11 +73,11 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
       setEnd('17:00');
       setBreakHrs(1.0);
       setTrainerName(targetMember ? targetMember.name : currentUser.name);
-      setAttendeeIds([targetMember ? targetMember.id : currentUser.id]);
+      setCoTrainerIds([]);
       setLocation('KBZ Life Training Room / Online');
       setNotes('');
     }
-  }, [trainingToEdit, targetMember, defaultDate, currentUser, isOpen]);
+  }, [trainingToEdit, targetMember, defaultDate, currentUser, allUsers, isOpen]);
 
   // Real-time formula computation: (End - Start) - Break
   const calculatedHours = useMemo(() => {
@@ -92,8 +98,8 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
   const selectedWeekday = getDayOfWeekCode(date);
   const weeksInMonth = getWeeksInMonth(selectedMonthKey);
 
-  const handleToggleAttendee = (uid: string) => {
-    setAttendeeIds((prev) =>
+  const handleToggleCoTrainer = (uid: string) => {
+    setCoTrainerIds((prev) =>
       prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid]
     );
   };
@@ -102,7 +108,16 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const selectedAttendees = allUsers.filter((u) => attendeeIds.includes(u.id));
+    const finalTrainerName = trainerName.trim() || currentUser.name;
+    const trainerUser = allUsers.find((u) => u.name === finalTrainerName);
+    const selectedCoTrainers = allUsers.filter((u) => coTrainerIds.includes(u.id));
+
+    const combinedIds = Array.from(
+      new Set([...(trainerUser ? [trainerUser.id] : []), ...coTrainerIds])
+    );
+    const combinedNames = Array.from(
+      new Set([finalTrainerName, ...selectedCoTrainers.map((u) => u.name)])
+    );
 
     onSaveTraining({
       id: trainingToEdit?.id,
@@ -112,9 +127,11 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
       end,
       breakHrs: Number(breakHrs) || 0,
       calculatedHours,
-      trainerName: trainerName.trim() || currentUser.name,
-      attendeeIds,
-      attendeeNames: selectedAttendees.map((u) => u.name),
+      trainerName: finalTrainerName,
+      coTrainerIds,
+      coTrainerNames: selectedCoTrainers.map((u) => u.name),
+      attendeeIds: combinedIds,
+      attendeeNames: combinedNames,
       location: location.trim(),
       notes: notes.trim(),
     });
@@ -171,6 +188,19 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
+          {trainingToEdit?.editedBy && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2 text-[11px] text-amber-900 flex items-center justify-between gap-2">
+              <span className="font-bold">
+                {language === 'my' ? 'နောက်ဆုံးပြင်ဆင်ထားသူ' : 'Last Edited By'}:{' '}
+                {trainingToEdit.editedBy}
+              </span>
+              {trainingToEdit.editedAt && (
+                <span className="text-[10px] font-semibold text-amber-700 tabular-nums">
+                  {trainingToEdit.editedAt}
+                </span>
+              )}
+            </div>
+          )}
           {/* Course / Topic Name */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -327,19 +357,19 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
             </div>
           </div>
 
-          {/* Attendees Selection */}
+          {/* Co-Trainer Selection */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-              <span>{t.attendees}</span>
+              <span>{t.coTrainer}</span>
               <span className="text-[11px] font-normal text-purple-700">
-                ({attendeeIds.length} selected)
+                ({coTrainerIds.length} selected)
               </span>
             </label>
             <div className="grid grid-cols-2 gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-lg max-h-32 overflow-y-auto">
               {allUsers
                 .filter((u) => u.roleTier !== 'VIEWER')
                 .map((u) => {
-                  const isSelected = attendeeIds.includes(u.id);
+                  const isSelected = coTrainerIds.includes(u.id);
                   const isCurrent = u.id === currentUser.id;
                   return (
                     <label
@@ -353,7 +383,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => handleToggleAttendee(u.id)}
+                        onChange={() => handleToggleCoTrainer(u.id)}
                         className="rounded text-purple-600 focus:ring-purple-500"
                       />
                       <span className="truncate">

@@ -482,11 +482,17 @@ export default function App() {
         const updatedAttendees = (tr.attendeeNames || []).map((att) =>
           att === oldName ? newName : att
         );
+        const updatedCoTrainers = (tr.coTrainerNames || []).map((co) =>
+          co === oldName ? newName : co
+        );
         const updatedTrainer = tr.trainerName === oldName ? newName : tr.trainerName;
+        const updatedEditedBy = tr.editedBy === oldName ? newName : tr.editedBy;
         return {
           ...tr,
           attendeeNames: updatedAttendees,
+          coTrainerNames: tr.coTrainerNames ? updatedCoTrainers : undefined,
           trainerName: updatedTrainer,
+          editedBy: updatedEditedBy,
         };
       })
     );
@@ -726,18 +732,27 @@ export default function App() {
     );
   };
 
-  // Add or Update Training Log
+  // Add or Update Training Log (with Co-Trainer & Editor Audit Trail)
   const handleSaveTraining = (trainingData: Partial<TrainingLog>) => {
     if (trainingData.id) {
+      const now = new Date();
+      const editedAt = `${now.toISOString().split('T')[0]} ${now.toTimeString().slice(0, 5)}`;
       setTrainingLogs((prev) =>
         prev.map((tr) =>
-          tr.id === trainingData.id ? ({ ...tr, ...trainingData } as TrainingLog) : tr
+          tr.id === trainingData.id
+            ? ({
+                ...tr,
+                ...trainingData,
+                editedBy: currentUser.name,
+                editedAt,
+              } as TrainingLog)
+            : tr
         )
       );
       showToast(
         language === 'my'
-          ? 'သင်တန်းမှတ်တမ်း ပြင်ဆင်ပြီးပါပြီ။'
-          : 'Training session log updated.'
+          ? `သင်တန်းမှတ်တမ်းကို ${currentUser.name} မှ ပြင်ဆင်သိမ်းဆည်းပြီးပါပြီ။`
+          : `Training session log updated by ${currentUser.name}.`
       );
     } else {
       const newTraining: TrainingLog = {
@@ -749,6 +764,8 @@ export default function App() {
         breakHrs: trainingData.breakHrs || 1.0,
         calculatedHours: trainingData.calculatedHours || 7.0,
         trainerName: trainingData.trainerName || currentUser.name,
+        coTrainerIds: trainingData.coTrainerIds || [],
+        coTrainerNames: trainingData.coTrainerNames || [],
         attendeeIds: trainingData.attendeeIds || [currentUser.id],
         attendeeNames: trainingData.attendeeNames || [currentUser.name],
         location: trainingData.location || '',
@@ -1029,19 +1046,9 @@ export default function App() {
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenEditProfile={handleOpenEditProfile}
             onOpenAddTask={handleOpenAddTask}
-            onOpenEditTask={(task) => {
-              setTaskToEdit(task);
-              setIsTaskModalOpen(true);
-            }}
-            onDeleteTask={handleDeleteTask}
             onOpenAddLeave={handleOpenAddLeave}
             onOpenAddTraining={handleOpenAddTraining}
-            onOpenComments={(task) => {
-              setSelectedCommentTask(task);
-              setIsCommentsModalOpen(true);
-            }}
             onOpenAddUser={() => setIsAddUserModalOpen(true)}
-            onUpdateMemberStatus={handleUpdateMemberStatus}
             language={language}
           />
         )}
@@ -1071,6 +1078,9 @@ export default function App() {
         {currentTab === 'leave' && (
           <LeaveTab
             leaves={leaves}
+            tasks={tasks}
+            trainingLogs={trainingLogs}
+            attendanceOverrides={attendanceOverrides}
             currentUser={currentUser}
             allUsers={users}
             onOpenAddLeave={handleOpenAddLeave}
@@ -1083,6 +1093,7 @@ export default function App() {
             }}
             onDeleteLeave={handleDeleteLeave}
             onApproveLeave={handleApproveLeave}
+            onSetAttendanceOverride={handleSetAttendanceOverride}
             language={language}
           />
         )}
@@ -1110,8 +1121,6 @@ export default function App() {
           <WeeklyBoardTab
             tasks={tasks}
             leaves={leaves}
-            trainingLogs={trainingLogs}
-            attendanceOverrides={attendanceOverrides}
             currentUser={currentUser}
             allUsers={users}
             onOpenAddTask={handleOpenAddTask}
@@ -1127,7 +1136,6 @@ export default function App() {
             }}
             onApproveLeave={handleApproveLeave}
             onDeleteLeave={handleDeleteLeave}
-            onSetAttendanceOverride={handleSetAttendanceOverride}
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenComments={(task) => {
               setSelectedCommentTask(task);

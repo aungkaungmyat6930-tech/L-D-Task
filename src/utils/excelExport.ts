@@ -64,6 +64,8 @@ export function exportMemberMonthlyExcel(params: {
     (tr) =>
       tr.attendeeIds?.includes(member.id) ||
       tr.attendeeNames?.includes(member.name) ||
+      tr.coTrainerIds?.includes(member.id) ||
+      tr.coTrainerNames?.includes(member.name) ||
       tr.trainerName === member.name
   );
 
@@ -197,12 +199,18 @@ export function exportMemberMonthlyExcel(params: {
     Week: getWeekOrdinal(getWeekOfMonth(tr.date)),
     'Topic / Session': tr.name,
     Trainer: tr.trainerName || '-',
+    'Co-Trainer':
+      (tr.coTrainerNames && tr.coTrainerNames.length > 0
+        ? tr.coTrainerNames
+        : tr.attendeeNames || []
+      ).join(', ') || '-',
     Date: tr.date,
     Start: tr.start,
     End: tr.end,
     'Break (hrs)': tr.breakHrs,
     'Hours': tr.calculatedHours,
     Location: tr.location || '-',
+    'Edited By': tr.editedBy ? `${tr.editedBy} (${tr.editedAt || ''})` : '-',
   }));
   const wsTraining = XLSX.utils.json_to_sheet(
     trainingData.length > 0
@@ -214,12 +222,14 @@ export function exportMemberMonthlyExcel(params: {
     { wch: 11 },
     { wch: 36 },
     { wch: 20 },
+    { wch: 24 },
     { wch: 12 },
     { wch: 8 },
     { wch: 8 },
     { wch: 11 },
     { wch: 9 },
     { wch: 26 },
+    { wch: 24 },
   ];
   XLSX.utils.book_append_sheet(wb, wsTraining, 'Training Topics');
 

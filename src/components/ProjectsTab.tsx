@@ -78,6 +78,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
   // Filters & Detail Modal
   const [filterMode, setFilterMode] = useState<'all' | 'followup' | 'my'>('all');
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null);
+  const [detailMemberFilter, setDetailMemberFilter] = useState<string>('all');
 
   // Project Create/Edit Modal State
   const [isProjModalOpen, setIsProjModalOpen] = useState(false);
@@ -538,7 +539,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <td className="p-3.5">
                       <button
                         type="button"
-                        onClick={() => setDetailProjectId(proj.id)}
+                        onClick={() => {
+                          setDetailMemberFilter('all');
+                          setDetailProjectId(proj.id);
+                        }}
                         className="font-extrabold text-slate-900 hover:text-blue-600 hover:underline text-left block"
                       >
                         {proj.title}
@@ -579,7 +583,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <td className="p-3.5">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          {isAdmin ? (
+                          {!isViewer ? (
                             <select
                               value={proj.status}
                               onChange={(e) =>
@@ -669,11 +673,14 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <td className="p-3.5 text-center">
                       <button
                         type="button"
-                        onClick={() => setDetailProjectId(proj.id)}
+                        onClick={() => {
+                          setDetailMemberFilter('all');
+                          setDetailProjectId(proj.id);
+                        }}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>{language === 'my' ? 'အသေးစိတ်' : 'View'}</span>
+                        <span>{language === 'my' ? 'ဝင်ကြည့်ရန်' : 'Open'}</span>
                       </button>
                     </td>
                   </tr>
@@ -764,31 +771,34 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setDetailProjectId(proj.id)}
+                        onClick={() => {
+                          setDetailMemberFilter('all');
+                          setDetailProjectId(proj.id);
+                        }}
                         className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                        title={language === 'my' ? 'အသေးစိတ်ကြည့်ရန်' : 'View project details'}
+                        title={language === 'my' ? 'Project နှင့် Task များ ဝင်ကြည့်ရန်' : 'Open project & view tasks'}
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
+                      {!isViewer && (
+                        <button
+                          type="button"
+                          onClick={() => openEditProjectModal(proj)}
+                          className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
+                          title={language === 'my' ? 'Project & Deadline ပြင်ရန်' : 'Edit project & assignees'}
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {isAdmin && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openEditProjectModal(proj)}
-                            className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
-                            title={language === 'my' ? 'Project & Deadline ပြင်ရန်' : 'Edit project & assignees'}
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setProjectToDelete(proj)}
-                            className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
-                            title={language === 'my' ? 'Project ဖျက်ရန်' : 'Delete project'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => setProjectToDelete(proj)}
+                          className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                          title={language === 'my' ? 'Project ဖျက်ရန်' : 'Delete project'}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -796,7 +806,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                   <div>
                     <button
                       type="button"
-                      onClick={() => setDetailProjectId(proj.id)}
+                      onClick={() => {
+                        setDetailMemberFilter('all');
+                        setDetailProjectId(proj.id);
+                      }}
                       className="text-sm font-extrabold text-slate-900 hover:text-blue-600 hover:underline leading-snug text-left"
                     >
                       {proj.title}
@@ -863,227 +876,32 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                   </div>
                 </div>
 
-                {/* Project Tasks & Follow-up Section */}
-                <div className="bg-slate-50/70 p-4 flex-grow space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                      <CheckSquare className="w-3.5 h-3.5 text-blue-600" />
-                      <span>
-                        {language === 'my'
-                          ? `Project Tasks & Follow-ups (${pTasks.length})`
-                          : `Project Tasks & Follow-ups (${pTasks.length})`}
-                      </span>
+                {/* Clean Project Card Footer — Click to view Tasks & Who's Doing What */}
+                <div className="bg-slate-50/80 px-5 py-3 flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 tabular-nums">
+                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                    <span>
+                      {language === 'my'
+                        ? `ပါဝင်သော Task များ: ${pTasks.length} ခု`
+                        : `${pTasks.length} Tasks inside`}
                     </span>
+                  </span>
 
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => openCreateProjectTaskModal(proj)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>{language === 'my' ? 'Task ထည့် (Admin)' : 'Add Task'}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {pTasks.length === 0 ? (
-                    <div className="py-4 px-3 text-center text-[11px] text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
-                      {isAdmin
-                        ? language === 'my'
-                          ? 'ဤ Project အတွက် Task မရှိသေးပါ — "+ Task ထည့် (Admin)" ကိုနှိပ်၍ Assign / Co-Assign နှင့် Deadline သတ်မှတ်နိုင်ပါသည်'
-                          : 'No project tasks yet — click "+ Add Task" to assign primary/co-assignees and deadlines'
-                        : language === 'my'
-                        ? 'Project Task မရှိသေးပါ'
-                        : 'No tasks added to this project yet'}
-                    </div>
-                  ) : (
-                    <div className="space-y-2.5">
-                      {pTasks.map((task) => {
-                        const isAssignedToMe =
-                          task.ownerId === currentUser.id ||
-                          task.ownerName === currentUser.name ||
-                          task.coAssigneeIds?.includes(currentUser.id);
-                        const canUpdateFollowup = (isAdmin || isAssignedToMe) && !isViewer;
-                        const isTaskFollowDue =
-                          task.status !== 'Completed' &&
-                          task.status !== 'Cancelled' &&
-                          task.followup <= todayStr;
-
-                        return (
-                          <div
-                            key={task.id}
-                            className={`bg-white rounded-xl border p-3 space-y-2 shadow-2xs ${
-                              task.status === 'Overdue'
-                                ? 'border-red-300 bg-red-50/20'
-                                : isTaskFollowDue
-                                ? 'border-amber-300'
-                                : 'border-slate-200'
-                            }`}
-                          >
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-xs font-bold text-slate-900">
-                                    {task.title}
-                                  </span>
-                                  {isTaskFollowDue && (
-                                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded">
-                                      Follow-up Due
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600 mt-1">
-                                  <span>
-                                    <strong className="text-slate-500">Assign:</strong>{' '}
-                                    <span className="font-bold text-slate-900">{task.ownerName}</span>
-                                  </span>
-                                  {task.coAssigneeNames && task.coAssigneeNames.length > 0 && (
-                                    <span>
-                                      <strong className="text-slate-500">Co-Assign:</strong>{' '}
-                                      <span className="font-bold text-indigo-700">
-                                        {task.coAssigneeNames.join(', ')}
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Inline Status Control */}
-                              <div className="flex items-center gap-1 shrink-0">
-                                {canUpdateFollowup ? (
-                                  <select
-                                    value={task.status}
-                                    onChange={(e) =>
-                                      onSaveTask({
-                                        ...task,
-                                        status: e.target.value as TaskStatus,
-                                      })
-                                    }
-                                    className={`text-[10px] font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
-                                      task.status === 'Completed'
-                                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                        : task.status === 'Overdue'
-                                        ? 'bg-red-100 text-red-800 border-red-200'
-                                        : task.status === 'Waiting'
-                                        ? 'bg-amber-100 text-amber-800 border-amber-200'
-                                        : 'bg-blue-100 text-blue-800 border-blue-200'
-                                    }`}
-                                  >
-                                    <option value="Active">{t.inProgress}</option>
-                                    <option value="Waiting">{t.waiting}</option>
-                                    <option value="Completed">{t.completed}</option>
-                                    <option value="Overdue">{t.overdue}</option>
-                                    <option value="Cancelled">{t.cancelled}</option>
-                                  </select>
-                                ) : (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                                    {task.status}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {task.note && (
-                              <p className="text-[11px] text-slate-500 leading-snug">{task.note}</p>
-                            )}
-
-                            {/* Deadline, Follow-up Date & Actions Footer */}
-                            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                              <div className="flex flex-wrap items-center gap-3 tabular-nums">
-                                <label className="inline-flex items-center gap-1 font-semibold text-slate-600">
-                                  <span>Deadline:</span>
-                                  {canSetupDeadline ? (
-                                    <input
-                                      type="date"
-                                      value={task.due}
-                                      onChange={(e) => {
-                                        if (e.target.value) {
-                                          onSaveTask({
-                                            ...task,
-                                            due: e.target.value,
-                                            day: getDayOfWeekCode(e.target.value),
-                                          });
-                                        }
-                                      }}
-                                      className={`text-[11px] font-bold border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                                        task.status === 'Overdue'
-                                          ? 'text-red-700 bg-red-50 border-red-200'
-                                          : 'text-slate-800 bg-slate-50 border-slate-200'
-                                      }`}
-                                    />
-                                  ) : (
-                                    <span
-                                      className={
-                                        task.status === 'Overdue'
-                                          ? 'text-red-600 font-bold'
-                                          : 'text-slate-800 font-bold'
-                                      }
-                                    >
-                                      {task.due}
-                                    </span>
-                                  )}
-                                </label>
-                                <label className="inline-flex items-center gap-1 text-slate-600 font-semibold">
-                                  <span>Follow-up:</span>
-                                  {canUpdateFollowup ? (
-                                    <input
-                                      type="date"
-                                      value={task.followup}
-                                      onChange={(e) => {
-                                        if (e.target.value) {
-                                          onSaveTask({ ...task, followup: e.target.value });
-                                        }
-                                      }}
-                                      className="text-[11px] font-bold text-indigo-800 bg-indigo-50/70 border border-indigo-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                    />
-                                  ) : (
-                                    <span className="font-bold text-slate-800">{task.followup}</span>
-                                  )}
-                                </label>
-                              </div>
-
-                              <div className="flex items-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenComments(task)}
-                                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                                  title="Follow-up Log & Comments"
-                                >
-                                  <MessageSquare className="w-3 h-3" />
-                                  <span>
-                                    Follow-up ({task.comments ? task.comments.length : 0})
-                                  </span>
-                                </button>
-
-                                {isAdmin && (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditProjectTaskModal(proj, task)}
-                                      className="p-1 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
-                                      title="Edit Task, Deadline & Assignees"
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setTaskToDelete(task)}
-                                      className="p-1 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
-                                      title="Delete Task"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailMemberFilter('all');
+                      setDetailProjectId(proj.id);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>
+                      {language === 'my'
+                        ? 'ဝင်ကြည့်ရန် & Task များပြင်ရန်'
+                        : 'Open Project & Edit Tasks'}
+                    </span>
+                  </button>
                 </div>
               </div>
             );
@@ -1091,9 +909,9 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
         )}
       </div>
 
-      {/* Modal 1: Admin Launch / Edit Strategic Project */}
+      {/* Modal 1: Launch / Edit Strategic Project */}
       {isProjModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
               <h3 className="text-sm font-bold text-white">
@@ -1283,9 +1101,9 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
         </div>
       )}
 
-      {/* Modal 2: Admin Add / Edit Project Task with Assign, Co-Assign, Deadline & Follow-up */}
+      {/* Modal 2: Add / Edit Project Task with Assign, Co-Assign, Deadline & Follow-up */}
       {isTaskModalOpen && taskProjectTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
               <div>
@@ -1295,8 +1113,8 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                       ? 'Project Task ပြင်ဆင်ရန်'
                       : 'Edit Project Task'
                     : language === 'my'
-                    ? 'Project Task အသစ်ထည့်ရန် (Admin)'
-                    : 'Add Task to Project (Admin)'}
+                    ? 'Project Task အသစ်ထည့်ရန်'
+                    : 'Add Task to Project'}
                 </h3>
                 <p className="text-[11px] text-amber-300 truncate max-w-sm">
                   Project: {taskProjectTarget.title}
@@ -1455,7 +1273,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
         </div>
       )}
 
-      {/* Modal 3: Public Project Stage, Assignees & Task Breakdown Modal (Viewable by Everyone) */}
+      {/* Modal 3: Public Project Stage, Assignees, Who's Doing What & Open Editing Modal */}
       {detailProject && (() => {
         const dTasks = tasks.filter((item) => item.projectId === detailProject.id);
         const dCompleted = dTasks.filter((tk) => tk.status === 'Completed').length;
@@ -1465,207 +1283,560 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
             : detailProject.progress;
         const dStageIdx = Math.max(0, PROJECT_STAGES.indexOf(detailProject.status));
 
+        // Build per-member task breakdown ("Who is doing what")
+        const memberTaskCounts = assignableUsers
+          .map((u) => {
+            const count = dTasks.filter(
+              (tk) =>
+                tk.ownerId === u.id ||
+                tk.ownerName === u.name ||
+                tk.coAssigneeIds?.includes(u.id) ||
+                tk.coAssigneeNames?.includes(u.name)
+            ).length;
+            return { user: u, count };
+          })
+          .filter((entry) => entry.count > 0);
+
+        const visibleDetailTasks =
+          detailMemberFilter === 'all'
+            ? dTasks
+            : dTasks.filter(
+                (tk) =>
+                  tk.ownerId === detailMemberFilter ||
+                  tk.coAssigneeIds?.includes(detailMemberFilter)
+              );
+
+        const projectOwnerUser = allUsers.find(
+          (u) => u.id === detailProject.ownerId || u.name === detailProject.ownerName
+        );
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
-                <div className="min-w-0 pr-3">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col max-h-[92vh]">
+              <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 gap-3">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
-                      Strategic Project
+                      Strategic Project · Excel Overview
                     </span>
                     <span className="text-[11px] text-emerald-300 font-semibold">
-                      {getStageLabelMy(detailProject.status)}
+                      {getStageLabelMy(detailProject.status)} ({dProgress}%)
                     </span>
+                    {!isViewer && (
+                      <span className="text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 px-2 py-0.5 rounded">
+                        {language === 'my' ? 'Edit ခွင့်ပြုထားသည်' : 'Editing Unlocked'}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-base font-extrabold text-white mt-1 truncate">
                     {detailProject.title}
                   </h3>
                 </div>
-                <button
-                  onClick={() => setDetailProjectId(null)}
-                  className="text-slate-400 hover:text-white p-1 rounded-md shrink-0"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isViewer && (
+                    <button
+                      type="button"
+                      onClick={() => openEditProjectModal(detailProject)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg transition"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>{language === 'my' ? 'Project ပြင်ရန်' : 'Edit Project'}</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDetailProjectId(null)}
+                    className="text-slate-400 hover:text-white p-1 rounded-md"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              <div className="p-6 space-y-5 overflow-y-auto">
-                {/* 4-Stage Roadmap */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                    <span>{language === 'my' ? 'လက်ရှိ ရောက်ရှိနေသည့်အဆင့်' : 'Current Project Stage'}</span>
-                    <span className="text-blue-700 tabular-nums">{dProgress}%</span>
+              <div className="p-5 space-y-5 overflow-y-auto">
+                {/* 1. Excel-Style Project Overview Summary Sheet */}
+                <div className="border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
+                  <div className="bg-emerald-800 text-white px-3.5 py-2 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-extrabold tracking-wide uppercase">
+                      {language === 'my'
+                        ? 'Project အနှစ်ချုပ်ဇယား (Excel Overview)'
+                        : 'Project Summary Sheet (Excel Overview)'}
+                    </span>
+                    <span className="text-[11px] text-emerald-100 font-semibold tabular-nums">
+                      {dCompleted} / {dTasks.length} {language === 'my' ? 'Task ပြီးစီး' : 'Tasks Completed'} ({dProgress}%)
+                    </span>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {PROJECT_STAGES.map((st, idx) => {
-                      const active = idx <= dStageIdx;
-                      return (
-                        <div key={st} className="space-y-1">
-                          <div
-                            className={`h-2 rounded-full ${
-                              active
-                                ? detailProject.status === 'Completed'
-                                  ? 'bg-emerald-500'
-                                  : 'bg-blue-600'
-                                : 'bg-slate-200'
-                            }`}
-                          />
-                          <span
-                            className={`block text-[10px] font-bold text-center ${
-                              idx === dStageIdx
-                                ? 'text-blue-700'
-                                : active
-                                ? 'text-slate-800'
-                                : 'text-slate-400'
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase">
+                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[200px]">
+                            Title
+                          </th>
+                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[140px]">
+                            Assigner
+                          </th>
+                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[150px]">
+                            Co-Assigner
+                          </th>
+                          <th className="border border-slate-300 px-3 py-2 text-left whitespace-nowrap">
+                            Deadline
+                          </th>
+                          <th className="border border-slate-300 px-3 py-2 text-left whitespace-nowrap">
+                            Follow-up
+                          </th>
+                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[170px]">
+                            {language === 'my' ? 'လုပ်နေတဲ့အဆင့် (Stage)' : 'Current Stage'}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="bg-white">
+                          <td className="border border-slate-300 px-3 py-2.5 align-top">
+                            <div className="font-extrabold text-slate-900">{detailProject.title}</div>
+                            {detailProject.deliverables && (
+                              <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                                {detailProject.deliverables}
+                              </div>
+                            )}
+                            {detailProject.followupNote && (
+                              <div className="text-[10px] text-indigo-700 font-semibold mt-1">
+                                Note: {detailProject.followupNote}
+                              </div>
+                            )}
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2.5 align-top">
+                            <button
+                              type="button"
+                              onClick={() => projectOwnerUser && onOpenMemberSheet(projectOwnerUser)}
+                              className="inline-flex items-center gap-1.5 font-bold text-slate-900 hover:text-blue-600 hover:underline text-left"
+                            >
+                              {projectOwnerUser && (
+                                <img
+                                  src={projectOwnerUser.avatar}
+                                  alt={detailProject.ownerName}
+                                  referrerPolicy="no-referrer"
+                                  className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
+                                />
+                              )}
+                              <span>{detailProject.ownerName}</span>
+                            </button>
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2.5 align-top font-semibold text-indigo-800">
+                            {detailProject.coAssigneeNames && detailProject.coAssigneeNames.length > 0
+                              ? detailProject.coAssigneeNames.join(', ')
+                              : '-'}
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2.5 align-top tabular-nums whitespace-nowrap">
+                            {canSetupDeadline ? (
+                              <input
+                                type="date"
+                                value={detailProject.deadline}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    onUpdateProject({ ...detailProject, deadline: e.target.value });
+                                  }
+                                }}
+                                className="text-xs font-bold border border-slate-300 rounded px-2 py-1 text-slate-900 bg-slate-50"
+                              />
+                            ) : (
+                              <span className="font-bold text-slate-900">{detailProject.deadline}</span>
+                            )}
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2.5 align-top tabular-nums whitespace-nowrap">
+                            {!isViewer ? (
+                              <input
+                                type="date"
+                                value={detailProject.followupDate || todayStr}
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    onUpdateProject({ ...detailProject, followupDate: e.target.value });
+                                  }
+                                }}
+                                className="text-xs font-bold border border-indigo-200 bg-indigo-50/50 rounded px-2 py-1 text-indigo-900"
+                              />
+                            ) : (
+                              <span className="font-bold text-indigo-800">
+                                {detailProject.followupDate || '-'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="border border-slate-300 px-3 py-2.5 align-top">
+                            {!isViewer ? (
+                              <select
+                                value={detailProject.status}
+                                onChange={(e) => {
+                                  const nextSt = e.target.value as StrategicProject['status'];
+                                  onUpdateProject({
+                                    ...detailProject,
+                                    status: nextSt,
+                                    progress: nextSt === 'Completed' ? 100 : detailProject.progress,
+                                  });
+                                }}
+                                className={`w-full text-xs font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
+                                  detailProject.status === 'Completed'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                    : detailProject.status === 'Final Review'
+                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
+                                    : detailProject.status === 'On Track'
+                                    ? 'bg-sky-50 text-sky-800 border-sky-300'
+                                    : 'bg-blue-50 text-blue-800 border-blue-300'
+                                }`}
+                              >
+                                {PROJECT_STAGES.map((st) => (
+                                  <option key={st} value={st}>
+                                    {st} — {getStageLabelMy(st)}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="font-bold text-slate-800">
+                                {detailProject.status} ({getStageLabelMy(detailProject.status)})
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Interactive 4-Stage Roadmap Strip */}
+                  <div className="bg-slate-50 border-t border-slate-300 px-3.5 py-2.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {PROJECT_STAGES.map((st, idx) => {
+                        const active = idx <= dStageIdx;
+                        return (
+                          <button
+                            key={st}
+                            type="button"
+                            disabled={isViewer}
+                            onClick={() => {
+                              if (!isViewer) {
+                                onUpdateProject({
+                                  ...detailProject,
+                                  status: st,
+                                  progress: st === 'Completed' ? 100 : detailProject.progress,
+                                });
+                              }
+                            }}
+                            className={`text-left space-y-1 p-1.5 rounded-lg transition ${
+                              !isViewer ? 'hover:bg-white cursor-pointer' : 'cursor-default'
                             }`}
                           >
-                            {idx + 1}. {st}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Assignees & Deadlines Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                  <div className="border border-slate-200 rounded-xl p-3.5 space-y-2">
-                    <div className="font-bold text-slate-500 text-[11px] uppercase">
-                      {language === 'my' ? 'တာဝန်ပေးထားသူများ' : 'Project Assignees'}
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-semibold">Assign (Lead): </span>
-                      <span className="font-extrabold text-slate-900">{detailProject.ownerName}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-semibold">Co-Assign: </span>
-                      <span className="font-bold text-indigo-800">
-                        {detailProject.coAssigneeNames && detailProject.coAssigneeNames.length > 0
-                          ? detailProject.coAssigneeNames.join(', ')
-                          : '-'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="border border-slate-200 rounded-xl p-3.5 space-y-2">
-                    <div className="font-bold text-slate-500 text-[11px] uppercase">
-                      {language === 'my' ? 'Deadline နှင့် Follow-up' : 'Deadline & Follow-up'}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-500 font-semibold">Deadline:</span>
-                      {canSetupDeadline ? (
-                        <input
-                          type="date"
-                          value={detailProject.deadline}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              onUpdateProject({ ...detailProject, deadline: e.target.value });
-                            }
-                          }}
-                          className="text-xs font-bold border border-slate-300 rounded px-2 py-0.5 text-slate-900"
-                        />
-                      ) : (
-                        <span className="font-bold text-slate-900 tabular-nums">
-                          {detailProject.deadline}
-                        </span>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-semibold">Follow-up: </span>
-                      <span className="font-bold text-indigo-800 tabular-nums">
-                        {detailProject.followupDate || '-'}
-                      </span>
+                            <div
+                              className={`h-1.5 rounded-full ${
+                                active
+                                  ? detailProject.status === 'Completed'
+                                    ? 'bg-emerald-500'
+                                    : 'bg-blue-600'
+                                  : 'bg-slate-200'
+                              }`}
+                            />
+                            <span
+                              className={`block text-[10px] font-bold text-center ${
+                                idx === dStageIdx
+                                  ? 'text-blue-700'
+                                  : active
+                                  ? 'text-slate-800'
+                                  : 'text-slate-400'
+                              }`}
+                            >
+                              {idx + 1}. {st}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
-                {/* Deliverables */}
-                <div className="border border-slate-200 rounded-xl p-3.5 text-xs space-y-1">
-                  <div className="font-bold text-slate-500 text-[11px] uppercase">
-                    Deliverables & Scope
-                  </div>
-                  <p className="text-slate-700 leading-relaxed">{detailProject.deliverables || '-'}</p>
-                  {detailProject.followupNote && (
-                    <p className="text-indigo-700 font-medium pt-1">
-                      Follow-up Note: {detailProject.followupNote}
-                    </p>
-                  )}
-                </div>
-
-                {/* Tasks inside Detail Modal */}
+                {/* 2. Excel-Style Project Tasks Overview Sheet */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-extrabold text-slate-900">
-                      {language === 'my'
-                        ? `စီမံကိန်းအောက်ရှိ Task များ (${dTasks.length})`
-                        : `Project Tasks Breakdown (${dTasks.length})`}
-                    </h4>
-                    {isAdmin && (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-extrabold text-slate-900">
+                        {language === 'my'
+                          ? `လုပ်ငန်းခွဲများ အသေးစိတ် Excel ဇယား — Task Overview (${visibleDetailTasks.length})`
+                          : `Project Tasks Excel Overview (${visibleDetailTasks.length})`}
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        {language === 'my'
+                          ? 'Title, Assigner, Co-Assigner, Deadline နှင့် လုပ်နေတဲ့အဆင့် (Stage) များကို Excel ဇယားကဲ့သို့ ရှင်းလင်းစွာ ကြည့်ရှုပြင်ဆင်နိုင်ပါသည်'
+                          : 'Clear spreadsheet-style overview of Title, Assigner, Co-Assigner, Deadline, Follow-up, and Current Stage'}
+                      </p>
+                    </div>
+                    {!isViewer && (
                       <button
                         type="button"
                         onClick={() => openCreateProjectTaskModal(detailProject)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>{language === 'my' ? 'Task ထည့် (Admin)' : 'Add Task'}</span>
+                        <span>{language === 'my' ? 'Task အသစ်ထည့်ရန်' : 'Add Task'}</span>
                       </button>
                     )}
                   </div>
 
-                  {dTasks.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-slate-400 border border-dashed border-slate-300 rounded-xl">
+                  {/* Per-Member Filter Chips */}
+                  {memberTaskCounts.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setDetailMemberFilter('all')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                          detailMemberFilter === 'all'
+                            ? 'bg-slate-900 text-white shadow-2xs'
+                            : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {language === 'my' ? 'အားလုံး' : 'All'} ({dTasks.length})
+                      </button>
+                      {memberTaskCounts.map(({ user, count }) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => setDetailMemberFilter(user.id)}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                            detailMemberFilter === user.id
+                              ? 'bg-blue-600 text-white shadow-2xs'
+                              : 'bg-white text-slate-700 border border-slate-200 hover:bg-blue-50'
+                          }`}
+                        >
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            referrerPolicy="no-referrer"
+                            className="w-4 h-4 rounded-full object-cover"
+                          />
+                          <span>
+                            {user.name} ({count})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {visibleDetailTasks.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-400 border border-dashed border-slate-300 rounded-xl">
                       {language === 'my' ? 'Task မရှိသေးပါ' : 'No tasks yet'}
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {dTasks.map((tk) => (
-                        <div
-                          key={tk.id}
-                          className="border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs"
-                        >
-                          <div className="space-y-0.5 min-w-0 flex-1">
-                            <div className="font-bold text-slate-900">{tk.title}</div>
-                            <div className="text-[11px] text-slate-600 flex flex-wrap gap-x-3 gap-y-0.5">
-                              <span>
-                                Assign: <strong className="text-slate-900">{tk.ownerName}</strong>
-                              </span>
-                              {tk.coAssigneeNames && tk.coAssigneeNames.length > 0 && (
-                                <span>
-                                  Co-Assign:{' '}
-                                  <strong className="text-indigo-700">
-                                    {tk.coAssigneeNames.join(', ')}
-                                  </strong>
-                                </span>
-                              )}
-                              <span className="tabular-nums">Deadline: {tk.due}</span>
-                              <span className="tabular-nums">Follow-up: {tk.followup}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                tk.status === 'Completed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : tk.status === 'Overdue'
-                                  ? 'bg-red-100 text-red-800'
-                                  : tk.status === 'Waiting'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
-                            >
-                              {tk.status}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => onOpenComments(tk)}
-                              className="px-2 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg"
-                            >
-                              Comments ({tk.comments?.length || 0})
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                    <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
+                      <table className="w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-800 text-white text-[11px] font-bold uppercase tracking-wide">
+                            <th className="border border-slate-600 px-2.5 py-2.5 text-center w-9">
+                              #
+                            </th>
+                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[210px]">
+                              Title
+                            </th>
+                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[140px]">
+                              Assigner
+                            </th>
+                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[130px]">
+                              Co-Assigner
+                            </th>
+                            <th className="border border-slate-600 px-2.5 py-2.5 text-left whitespace-nowrap">
+                              Deadline
+                            </th>
+                            <th className="border border-slate-600 px-2.5 py-2.5 text-left whitespace-nowrap">
+                              Follow-up
+                            </th>
+                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[155px]">
+                              {language === 'my' ? 'လုပ်နေတဲ့အဆင့်' : 'Current Stage'}
+                            </th>
+                            <th className="border border-slate-600 px-2.5 py-2.5 text-center whitespace-nowrap">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visibleDetailTasks.map((tk, idx) => {
+                            const ownerUsr = allUsers.find(
+                              (u) => u.id === tk.ownerId || u.name === tk.ownerName
+                            );
+                            const isTaskFollowDue =
+                              tk.status !== 'Completed' &&
+                              tk.status !== 'Cancelled' &&
+                              tk.followup <= todayStr;
+
+                            return (
+                              <tr
+                                key={tk.id}
+                                className={`transition-colors ${
+                                  tk.status === 'Overdue'
+                                    ? 'bg-red-50/60 hover:bg-red-50'
+                                    : isTaskFollowDue
+                                    ? 'bg-amber-50/40 hover:bg-amber-50/70'
+                                    : idx % 2 === 0
+                                    ? 'bg-white hover:bg-blue-50/40'
+                                    : 'bg-slate-50/70 hover:bg-blue-50/40'
+                                }`}
+                              >
+                                <td className="border border-slate-300 px-2.5 py-2 text-center font-bold text-slate-500 tabular-nums">
+                                  {idx + 1}
+                                </td>
+                                <td className="border border-slate-300 px-3 py-2 align-top">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-extrabold text-slate-900">
+                                      {tk.title}
+                                    </span>
+                                    {isTaskFollowDue && (
+                                      <span className="text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded">
+                                        Follow-up Due
+                                      </span>
+                                    )}
+                                  </div>
+                                  {tk.note && (
+                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                                      {tk.note}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="border border-slate-300 px-3 py-2 align-top">
+                                  <button
+                                    type="button"
+                                    onClick={() => ownerUsr && onOpenMemberSheet(ownerUsr)}
+                                    className="inline-flex items-center gap-1.5 font-bold text-slate-900 hover:text-blue-600 hover:underline text-left"
+                                  >
+                                    {ownerUsr && (
+                                      <img
+                                        src={ownerUsr.avatar}
+                                        alt={tk.ownerName}
+                                        referrerPolicy="no-referrer"
+                                        className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
+                                      />
+                                    )}
+                                    <span>{tk.ownerName}</span>
+                                  </button>
+                                </td>
+                                <td className="border border-slate-300 px-3 py-2 align-top">
+                                  {tk.coAssigneeNames && tk.coAssigneeNames.length > 0 ? (
+                                    <span className="font-semibold text-indigo-800">
+                                      {tk.coAssigneeNames.join(', ')}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
+                                <td className="border border-slate-300 px-2.5 py-2 align-top tabular-nums whitespace-nowrap">
+                                  {canSetupDeadline ? (
+                                    <input
+                                      type="date"
+                                      value={tk.due}
+                                      onChange={(e) => {
+                                        if (e.target.value) {
+                                          onSaveTask({
+                                            ...tk,
+                                            due: e.target.value,
+                                            day: getDayOfWeekCode(e.target.value),
+                                          });
+                                        }
+                                      }}
+                                      className="text-[11px] font-bold border border-slate-300 rounded px-1.5 py-0.5 text-slate-900 bg-white"
+                                    />
+                                  ) : (
+                                    <span className="font-bold text-slate-900">{tk.due}</span>
+                                  )}
+                                </td>
+                                <td className="border border-slate-300 px-2.5 py-2 align-top tabular-nums whitespace-nowrap">
+                                  {!isViewer ? (
+                                    <input
+                                      type="date"
+                                      value={tk.followup}
+                                      onChange={(e) => {
+                                        if (e.target.value) {
+                                          onSaveTask({ ...tk, followup: e.target.value });
+                                        }
+                                      }}
+                                      className="text-[11px] font-bold border border-indigo-200 rounded px-1.5 py-0.5 text-indigo-900 bg-indigo-50/50"
+                                    />
+                                  ) : (
+                                    <span className="font-bold text-slate-900">{tk.followup}</span>
+                                  )}
+                                </td>
+                                <td className="border border-slate-300 px-2.5 py-2 align-top">
+                                  {!isViewer ? (
+                                    <select
+                                      value={tk.status}
+                                      onChange={(e) =>
+                                        onSaveTask({
+                                          ...tk,
+                                          status: e.target.value as TaskStatus,
+                                        })
+                                      }
+                                      className={`w-full text-[11px] font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
+                                        tk.status === 'Completed'
+                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                          : tk.status === 'Overdue'
+                                          ? 'bg-red-100 text-red-800 border-red-300'
+                                          : tk.status === 'Waiting'
+                                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                          : tk.status === 'Cancelled'
+                                          ? 'bg-slate-200 text-slate-700 border-slate-300'
+                                          : 'bg-blue-100 text-blue-800 border-blue-300'
+                                      }`}
+                                    >
+                                      <option value="Active">{t.inProgress}</option>
+                                      <option value="Waiting">{t.waiting}</option>
+                                      <option value="Completed">{t.completed}</option>
+                                      <option value="Overdue">{t.overdue}</option>
+                                      <option value="Cancelled">{t.cancelled}</option>
+                                    </select>
+                                  ) : (
+                                    <span
+                                      className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded ${
+                                        tk.status === 'Completed'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : tk.status === 'Overdue'
+                                          ? 'bg-red-100 text-red-800'
+                                          : tk.status === 'Waiting'
+                                          ? 'bg-amber-100 text-amber-800'
+                                          : 'bg-blue-100 text-blue-800'
+                                      }`}
+                                    >
+                                      {tk.status}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="border border-slate-300 px-2.5 py-2 align-top">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenComments(tk)}
+                                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition"
+                                      title="Comments"
+                                    >
+                                      <MessageSquare className="w-3 h-3" />
+                                      <span className="tabular-nums">{tk.comments?.length || 0}</span>
+                                    </button>
+                                    {!isViewer && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openEditProjectTaskModal(detailProject, tk)}
+                                          className="p-1 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition"
+                                          title={language === 'my' ? 'ပြင်ရန်' : 'Edit'}
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setTaskToDelete(tk)}
+                                          className="p-1 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded transition"
+                                          title="Delete Task"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>

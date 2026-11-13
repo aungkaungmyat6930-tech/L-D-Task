@@ -69,6 +69,8 @@ export function computeMemberMonthlyAttendance(
     (tr) =>
       tr.attendeeIds?.includes(member.id) ||
       tr.attendeeNames?.includes(member.name) ||
+      tr.coTrainerIds?.includes(member.id) ||
+      tr.coTrainerNames?.includes(member.name) ||
       tr.trainerName === member.name
   );
   const memberTasks = tasks.filter(
