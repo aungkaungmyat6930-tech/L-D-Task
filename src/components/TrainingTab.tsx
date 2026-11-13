@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { TrainingLog, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import { isAdminOrSuper } from '../utils/roleHelpers';
 import { 
   Clock, 
   Plus, 
@@ -61,7 +62,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
     setQCoTrainers([]);
   }, [currentUser.id, currentUser.name]);
 
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
 
   // Real-time formula

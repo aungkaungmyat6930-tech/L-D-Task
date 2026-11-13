@@ -16,13 +16,9 @@ import {
 
 export type ComputedDayStatus =
   | 'Office'
-  | 'WFH'
-  | 'Training'
   | 'LeaveApproved'
   | 'LeavePending'
-  | 'Weekend'
-  | 'Holiday'
-  | 'Absent';
+  | 'Weekend';
 
 export interface DailyAttendanceRow {
   date: string;
@@ -42,13 +38,10 @@ export interface MemberMonthlyAttendanceSummary {
   monthKey: string;
   workingDaysInMonth: number;
   officePresentDays: number;
-  wfhDays: number;
   trainingDays: number;
   trainingHoursInMonth: number;
   approvedLeaveDaysInMonth: number;
   pendingLeaveDaysInMonth: number;
-  holidayDays: number;
-  absentDays: number;
   dailyRows: DailyAttendanceRow[];
 }
 
@@ -81,12 +74,9 @@ export function computeMemberMonthlyAttendance(
   const dailyRows: DailyAttendanceRow[] = [];
   let workingDaysInMonth = 0;
   let officePresentDays = 0;
-  let wfhDays = 0;
   let trainingDays = 0;
   let approvedLeaveDaysInMonth = 0;
   let pendingLeaveDaysInMonth = 0;
-  let holidayDays = 0;
-  let absentDays = 0;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = `${monthKey}-${String(d).padStart(2, '0')}`;
@@ -102,36 +92,39 @@ export function computeMemberMonthlyAttendance(
     const tasksDueCount = memberTasks.filter((t) => t.due === date).length;
 
     let status: ComputedDayStatus;
+    let normalizedOverride: AttendanceOverrideStatus | undefined;
+
     if (override) {
-      status = override.status;
+      const raw = override.status as string;
+      if (raw === 'Leave') {
+        status = 'LeaveApproved';
+        normalizedOverride = 'Leave';
+      } else {
+        status = 'Office';
+        normalizedOverride = 'Office';
+      }
     } else if (approvedLeave) {
       status = 'LeaveApproved';
     } else if (isWeekend) {
-      status = dayTrainings.length > 0 ? 'Training' : 'Weekend';
+      status = 'Weekend';
     } else if (pendingLeave) {
       status = 'LeavePending';
-    } else if (dayTrainings.length > 0) {
-      status = 'Training';
     } else {
       status = 'Office';
     }
 
-    if (!isWeekend && status !== 'Holiday') {
+    if (!isWeekend) {
       workingDaysInMonth += 1;
-    } else if (isWeekend && (status === 'Office' || status === 'WFH' || status === 'Training')) {
+    } else if (status === 'Office' || status === 'LeaveApproved') {
       workingDaysInMonth += 1;
+    }
+
+    if (dayTrainings.length > 0 && status === 'Office') {
+      trainingDays += 1;
     }
 
     switch (status) {
       case 'Office':
-        officePresentDays += 1;
-        break;
-      case 'WFH':
-        wfhDays += 1;
-        officePresentDays += 1;
-        break;
-      case 'Training':
-        trainingDays += 1;
         officePresentDays += 1;
         break;
       case 'LeaveApproved':
@@ -139,12 +132,6 @@ export function computeMemberMonthlyAttendance(
         break;
       case 'LeavePending':
         pendingLeaveDaysInMonth += 1;
-        break;
-      case 'Holiday':
-        holidayDays += 1;
-        break;
-      case 'Absent':
-        absentDays += 1;
         break;
       default:
         break;
@@ -157,7 +144,7 @@ export function computeMemberMonthlyAttendance(
       week,
       isWeekend,
       status,
-      overrideStatus: override?.status,
+      overrideStatus: normalizedOverride,
       leave: approvedLeave || pendingLeave,
       trainingSessions: dayTrainings,
       tasksDueCount,
@@ -192,13 +179,10 @@ export function computeMemberMonthlyAttendance(
     monthKey,
     workingDaysInMonth,
     officePresentDays,
-    wfhDays,
     trainingDays,
     trainingHoursInMonth,
     approvedLeaveDaysInMonth,
     pendingLeaveDaysInMonth,
-    holidayDays,
-    absentDays,
     dailyRows,
   };
 }

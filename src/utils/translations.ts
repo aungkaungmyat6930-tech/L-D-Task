@@ -8,6 +8,7 @@ export const TRANSLATIONS = {
     activeUserContext: 'Active User:',
     editProfile: 'Edit My Profile',
     switchUser: 'Switch User',
+    superAdminBadge: 'Super Admin',
     adminBadge: 'Admin',
     memberBadge: 'Member',
     viewerBadge: 'Viewer (Read-Only)',
@@ -47,7 +48,7 @@ export const TRANSLATIONS = {
 
     // Statuses
     inProgress: 'In Progress',
-    waiting: 'Waiting',
+    waiting: 'Pending',
     completed: 'Completed',
     cancelled: 'Cancelled',
     overdue: 'Overdue',
@@ -112,6 +113,7 @@ export const TRANSLATIONS = {
     activeUserContext: 'လက်ရှိအသုံးပြုသူ -',
     editProfile: 'မိမိနာမည်/ပရိုဖိုင် ပြင်ဆင်ရန်',
     switchUser: 'အကောင့်ပြောင်းရန်',
+    superAdminBadge: 'စူပါစီမံခန့်ခွဲသူ (Super Admin)',
     adminBadge: 'စီမံခန့်ခွဲသူ (Admin)',
     memberBadge: 'အဖွဲ့ဝင် (Member)',
     viewerBadge: 'ကြည့်ရှုသူ (Viewer)',
@@ -150,12 +152,12 @@ export const TRANSLATIONS = {
     readOnlySheet: 'အဖွဲ့ဝင်မှတ်တမ်း ကြည့်ရှုနေသည်',
 
     // Statuses
-    inProgress: 'လုပ်ဆောင်ဆဲ',
-    waiting: 'စောင့်ဆိုင်းဆဲ',
-    completed: 'ပြီးစီး',
+    inProgress: 'လုပ်ဆောင်ဆဲ (In Progress)',
+    waiting: 'စောင့်ဆိုင်းဆဲ (Pending)',
+    completed: 'ပြီးစီး (Completed)',
     cancelled: 'ပယ်ဖျက်',
     overdue: 'ရက်ကျော်လွန်',
-    pending: 'စောင့်ဆိုင်းဆဲ',
+    pending: 'စောင့်ဆိုင်းဆဲ (Pending)',
     approved: 'အတည်ပြုပြီး',
     rejected: 'ငြင်းပယ်ထား',
 

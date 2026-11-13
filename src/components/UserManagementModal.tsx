@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { UserProfile, RoleTier, MemberStatus } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { processProfilePhotoFile } from '../utils/imageUpload';
+import { isAdminOrSuper } from '../utils/roleHelpers';
 import { 
   X, 
   UserPlus, 
@@ -76,7 +77,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
   if (!isOpen) return null;
 
-  if (currentUser.roleTier !== 'ADMIN') {
+  if (!isAdminOrSuper(currentUser.roleTier)) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
         <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 text-center space-y-4">
@@ -170,7 +171,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <span>{language === 'my' ? 'ဝန်ထမ်း အဝင်/အထွက် စီမံခန့်ခွဲမှု (Admin Portal)' : 'HR Staff Onboarding & Offboarding Portal'}</span>
                 <span className="text-[10px] bg-purple-900/80 text-purple-200 px-2 py-0.5 rounded border border-purple-500/40">
-                  ADMIN ONLY
+                  ADMIN / SUPER ADMIN
                 </span>
               </h3>
               <p className="text-[11px] text-slate-300">
@@ -299,7 +300,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   className="w-full text-xs px-3 py-2 border border-purple-300 bg-purple-50 rounded-lg font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="MEMBER">Member (Self-Service)</option>
-                  <option value="ADMIN">Admin (Full Control)</option>
+                  <option value="ADMIN">Admin (Management)</option>
+                  <option value="SUPER_ADMIN">Super Admin (Full Control + Leave Approval)</option>
                   <option value="VIEWER">Viewer (Read-Only)</option>
                 </select>
               </div>

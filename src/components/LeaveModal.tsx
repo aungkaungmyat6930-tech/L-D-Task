@@ -13,6 +13,7 @@ import {
   getDateForWeekAndWeekday,
   formatMonthLabel,
 } from '../utils/weekHelpers';
+import { isAdminOrSuper, canApproveLeave } from '../utils/roleHelpers';
 import { X, Check, CalendarDays, ShieldCheck, FileCheck2 } from 'lucide-react';
 
 interface LeaveModalProps {
@@ -39,7 +40,8 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApprove = canApproveLeave(currentUser.roleTier);
 
   const [memberId, setMemberId] = useState(currentUser.id);
   const [type, setType] = useState<LeaveType>('Casual Leave');
@@ -130,7 +132,9 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
     };
 
     if (isAdmin) {
-      payload.status = status;
+      if (canApprove) {
+        payload.status = status;
+      }
       payload.hrRefId = hrRefId.trim() || undefined;
       payload.hrSynced = hrSynced;
       payload.adminNote = adminNote.trim() || undefined;
@@ -351,7 +355,9 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                       : 'Admin: HR Leave Alignment & Status Override'}
                   </span>
                 </div>
-                <span className="text-[10px] font-bold text-purple-700">ADMIN</span>
+                <span className="text-[10px] font-bold text-purple-700">
+                  {canApprove ? 'SUPER ADMIN' : 'ADMIN'}
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -361,13 +367,23 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                   </label>
                   <select
                     value={status}
+                    disabled={!canApprove}
                     onChange={(e) => setStatus(e.target.value as LeaveStatus)}
-                    className="w-full text-xs px-2.5 py-1.5 border border-purple-300 bg-white rounded-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className={`w-full text-xs px-2.5 py-1.5 border border-purple-300 rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+                      canApprove ? 'bg-white text-slate-800' : 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                    }`}
                   >
                     <option value="Pending">Pending (စောင့်ဆိုင်းဆဲ)</option>
                     <option value="Approved">Approved (အတည်ပြုပြီး)</option>
                     <option value="Rejected">Rejected (ငြင်းပယ်ထား)</option>
                   </select>
+                  {!canApprove && (
+                    <span className="block text-[10px] text-purple-700 mt-0.5 font-medium">
+                      {language === 'my'
+                        ? 'Super Admin သာလျှင် Leave Approval ပြောင်းလဲနိုင်ပါသည်'
+                        : 'Approval status can only be changed by Super Admin'}
+                    </span>
+                  )}
                 </div>
 
                 <div>

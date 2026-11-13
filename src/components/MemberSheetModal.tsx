@@ -16,6 +16,7 @@ import {
   getWeeksInMonth,
   getWeekLabel,
   getWeekOrdinal,
+  getWeekDayRange,
   getDefaultDateForMonthWeek,
   shiftMonth,
   formatMonthLabel,
@@ -26,6 +27,11 @@ import {
   DailyAttendanceRow,
 } from '../utils/attendanceHelpers';
 import { exportMemberMonthlyExcel } from '../utils/excelExport';
+import {
+  isAdminOrSuper,
+  canApproveLeave,
+  canApproveTaskCompletion,
+} from '../utils/roleHelpers';
 import { 
   X, 
   CheckSquare, 
@@ -36,7 +42,6 @@ import {
   Trash2, 
   MessageSquare, 
   ShieldCheck, 
-  AlertCircle,
   User,
   Sparkles,
   UserCheck,
@@ -48,7 +53,9 @@ import {
   FileCheck2,
   Building2,
   FileSpreadsheet,
-  BellRing
+  BellRing,
+  CheckCircle2,
+  RotateCcw
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -71,6 +78,7 @@ interface MemberSheetModalProps {
   onOpenAddTask: (member: UserProfile, defaultDate?: string) => void;
   onOpenEditTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
+  onApproveTaskCompletion: (taskId: string, approved: boolean) => void;
   onOpenComments: (task: TaskItem) => void;
   onOpenAddLeave: (member: UserProfile, defaultDate?: string) => void;
   onOpenEditLeave: (leave: LeaveRequest) => void;
@@ -98,6 +106,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   onOpenAddTask,
   onOpenEditTask,
   onDeleteTask,
+  onApproveTaskCompletion,
   onOpenComments,
   onOpenAddLeave,
   onOpenEditLeave,
@@ -139,7 +148,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   if (!isOpen || !member) return null;
 
   const isMe = currentUser.id === member.id || currentUser.name === member.name;
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApproveLeaves = canApproveLeave(currentUser.roleTier);
+  const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
   const isResigned = member.status === 'Resigned';
 
@@ -178,7 +189,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
       (item.status !== 'Completed' && item.status !== 'Cancelled' && item.due < todayStr)
   ).length;
   const activeTaskCount = memberTasks.filter(
-    (item) => item.status === 'Active' || item.status === 'Waiting' || item.status === 'Overdue'
+    (item) =>
+      item.status === 'Active' ||
+      item.status === 'Pending' ||
+      item.status === 'Waiting' ||
+      item.status === 'Overdue'
   ).length;
 
   // Month filtering helpers
@@ -213,7 +228,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     }
     if (activeSubtab === 'attendance') {
       return monthlyAttendance.dailyRows.filter(
-        (r) => r.week === wk && (r.status === 'Office' || r.status === 'WFH' || r.status === 'Training')
+        (r) => r.week === wk && r.status === 'Office'
       ).length;
     }
     return monthTraining.filter((item) => getWeekOfMonth(item.date) === wk).length;
@@ -264,13 +279,20 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   // Render Task card row
   const renderTaskCard = (task: TaskItem) => {
     const isOverdue = task.status === 'Overdue';
+    const isPending = task.status === 'Pending' || task.status === 'Waiting';
     const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
     const canEditTask = (isMyTask || hasSheetControl) && !isViewer;
+    const displayStatus =
+      task.status === 'Active'
+        ? 'In Progress'
+        : isPending
+        ? 'Pending'
+        : task.status;
 
     return (
       <div
         key={task.id}
-        className="row-3d-card bg-white rounded-xl border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+        className="row-3d-card bg-white rounded-lg border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
       >
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -281,13 +303,26 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   ? 'bg-emerald-100 text-emerald-800'
                   : task.status === 'Overdue'
                   ? 'bg-red-100 text-red-800'
-                  : task.status === 'Waiting'
+                  : isPending
                   ? 'bg-amber-100 text-amber-800'
                   : 'bg-blue-100 text-blue-800'
               }`}
             >
-              {task.status}
+              {displayStatus}
             </span>
+            {task.completionRequested && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {language === 'my' ? 'Admin အတည်ပြုရန် စောင့်ဆိုင်းဆဲ' : 'Pending Admin Approval'}
+                </span>
+              </span>
+            )}
+            {task.status === 'Completed' && task.completionApprovedBy && (
+              <span className="text-[10px] font-bold text-emerald-700">
+                ✓ {task.completionApprovedBy}
+              </span>
+            )}
             {isMyTask && (
               <span className="text-[10px] font-bold text-blue-700">
                 · {language === 'my' ? 'သင့် Task' : 'Your Task'}
@@ -313,7 +348,27 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          {canApproveComplete && task.completionRequested && (
+            <>
+              <button
+                onClick={() => onApproveTaskCompletion(task.id, true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs shadow-xs transition"
+                title={language === 'my' ? 'ပြီးစီးကြောင်း အတည်ပြုရန်' : 'Approve Complete'}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'Complete အတည်ပြု' : 'Approve'}</span>
+              </button>
+              <button
+                onClick={() => onApproveTaskCompletion(task.id, false)}
+                className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'In Progress သို့ ပြန်ပို့ရန်' : 'Return to In Progress'}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => onOpenComments(task)}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-xs transition"
@@ -417,7 +472,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
-          {isAdmin && leave.status === 'Pending' && (
+          {canApproveLeaves && leave.status === 'Pending' && (
             <>
               <button
                 onClick={() => onApproveLeave(leave.id, 'Approved')}
@@ -434,6 +489,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                 Reject
               </button>
             </>
+          )}
+          {isAdmin && !canApproveLeaves && leave.status === 'Pending' && (
+            <span className="px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold">
+              {language === 'my' ? 'Super Admin အတည်ပြုရန်' : 'Super Admin Approval'}
+            </span>
           )}
 
           {canEditLeave && (
@@ -572,16 +632,6 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           label: language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present',
           cls: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
         };
-      case 'WFH':
-        return {
-          label: language === 'my' ? 'WFH (အိမ်မှ)' : 'WFH',
-          cls: 'bg-sky-100 text-sky-800 border border-sky-200',
-        };
-      case 'Training':
-        return {
-          label: language === 'my' ? 'သင်တန်း (Training)' : 'Training',
-          cls: 'bg-purple-100 text-purple-800 border border-purple-200',
-        };
       case 'LeaveApproved':
         return {
           label: language === 'my' ? 'ခွင့် (အတည်ပြု)' : 'On Leave',
@@ -591,16 +641,6 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         return {
           label: language === 'my' ? 'ခွင့် (စောင့်ဆိုင်း)' : 'Leave Pending',
           cls: 'bg-amber-100 text-amber-800 border border-amber-200',
-        };
-      case 'Holiday':
-        return {
-          label: language === 'my' ? 'ရုံးပိတ်ရက်' : 'Holiday',
-          cls: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
-        };
-      case 'Absent':
-        return {
-          label: language === 'my' ? 'ပျက်ကွက်' : 'Absent',
-          cls: 'bg-red-100 text-red-800 border border-red-200',
         };
       case 'Weekend':
         return {
@@ -617,13 +657,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     return (
       <div
         key={row.date}
-        className={`rounded-xl border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
+        className={`rounded-lg border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
           row.isWeekend && !row.overrideStatus && row.status === 'Weekend'
             ? 'bg-slate-50/80 border-slate-200/70 text-slate-500'
             : row.status === 'LeaveApproved'
             ? 'bg-teal-50/40 border-teal-200/80'
-            : row.status === 'Absent'
-            ? 'bg-red-50/40 border-red-200/80'
             : 'bg-white border-slate-200/90'
         }`}
       >
@@ -632,7 +670,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           <span className="w-9 text-center py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[11px]">
             {row.weekday}
           </span>
-          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${badge.cls}`}>
+          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${badge.cls}`}>
             {badge.label}
           </span>
           {row.overrideStatus && (
@@ -644,11 +682,6 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             <span className="text-[11px] text-teal-800 font-semibold truncate max-w-xs">
               · {row.leave.type}
               {row.leave.hrRefId ? ` (${row.leave.hrRefId})` : ''}
-            </span>
-          )}
-          {row.trainingSessions.length > 0 && (
-            <span className="text-[11px] text-purple-800 font-semibold truncate max-w-xs">
-              · {row.trainingSessions.map((tr) => tr.name).join(', ')}
             </span>
           )}
           {row.tasksDueCount > 0 && (
@@ -675,10 +708,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             >
               <option value="AUTO">{language === 'my' ? 'Auto (စနစ်အတိုင်း)' : 'Auto'}</option>
               <option value="Office">{language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}</option>
-              <option value="WFH">WFH</option>
-              <option value="Training">{language === 'my' ? 'သင်တန်း' : 'Training'}</option>
-              <option value="Holiday">{language === 'my' ? 'ရုံးပိတ်ရက်' : 'Holiday'}</option>
-              <option value="Absent">{language === 'my' ? 'ပျက်ကွက်' : 'Absent'}</option>
+              <option value="Leave">{language === 'my' ? 'ခွင့် (Leave)' : 'Leave'}</option>
             </select>
 
             {!row.leave && (
@@ -705,8 +735,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
       return (
         <div className="space-y-4">
-          {/* Combined Monthly Attendance & Leave Summary Strip */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+          {/* Combined Monthly Attendance & Leave Summary Strip (Office & Leave Only) */}
+          <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-xs space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h4 className="text-xs font-extrabold text-slate-900">
@@ -716,23 +746,23 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                 </h4>
                 <p className="text-[11px] text-slate-500">
                   {language === 'my'
-                    ? 'ခွင့်မှတ်တမ်းများ၊ သင်တန်းရက်များနှင့် ရုံးတက်ရက်များကို အလိုအလျောက် တွက်ချက်ပေါင်းစည်းထားပါသည်။'
-                    : 'Automatically calculated from approved leaves, training sessions, and manual overrides.'}
+                    ? 'ရုံးတက် (Office) နှင့် ခွင့်ရက် (Leave) များကို အလိုအလျောက် တွက်ချက်ပြသထားပါသည်။'
+                    : 'Automatically calculated from Office days and approved/pending Leave records.'}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={handleExportMemberExcel}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition"
               >
                 <FileSpreadsheet className="w-4 h-4" />
                 <span>{language === 'my' ? 'Excel ထုတ်မည် (.xlsx)' : 'Export Excel (.xlsx)'}</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-slate-500 block">
                   {language === 'my' ? 'အလုပ်တက်ရက်စုစုပေါင်း' : 'Working Days'}
                 </span>
@@ -740,36 +770,28 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   {monthlyAttendance.workingDaysInMonth}
                 </span>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-emerald-700 block">
-                  {language === 'my' ? 'ရုံးတက်ရက် (Present)' : 'Office Present'}
+                  {language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present'}
                 </span>
                 <span className="text-lg font-black text-emerald-900 tabular-nums">
                   {monthlyAttendance.officePresentDays}
                 </span>
               </div>
-              <div className="bg-teal-50 border border-teal-200 rounded-xl p-2.5">
+              <div className="bg-teal-50 border border-teal-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-teal-700 block">
-                  {language === 'my' ? 'အတည်ပြု ခွင့်ရက်' : 'Approved Leave'}
+                  {language === 'my' ? 'အတည်ပြု ခွင့် (Leave)' : 'Approved Leave'}
                 </span>
                 <span className="text-lg font-black text-teal-900 tabular-nums">
                   {monthlyAttendance.approvedLeaveDaysInMonth}
                 </span>
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-amber-700 block">
-                  {language === 'my' ? 'စောင့်ဆိုင်း ခွင့်ရက်' : 'Pending Leave'}
+                  {language === 'my' ? 'စောင့်ဆိုင်း ခွင့်' : 'Pending Leave'}
                 </span>
                 <span className="text-lg font-black text-amber-900 tabular-nums">
                   {monthlyAttendance.pendingLeaveDaysInMonth}
-                </span>
-              </div>
-              <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 col-span-2 sm:col-span-1">
-                <span className="text-[10px] font-bold text-purple-700 block">
-                  {language === 'my' ? 'သင်တန်းရက် / နာရီ' : 'Training Days / Hrs'}
-                </span>
-                <span className="text-lg font-black text-purple-900 tabular-nums">
-                  {monthlyAttendance.trainingDays}d · {monthlyAttendance.trainingHoursInMonth.toFixed(1)}h
                 </span>
               </div>
             </div>
@@ -777,9 +799,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
           {weeksToRender.map((wk) => {
             const wkRows = monthlyAttendance.dailyRows.filter((r) => r.week === wk);
-            const wkPresent = wkRows.filter(
-              (r) => r.status === 'Office' || r.status === 'WFH' || r.status === 'Training'
-            ).length;
+            const wkPresent = wkRows.filter((r) => r.status === 'Office').length;
             const wkLeave = wkRows.filter(
               (r) => r.status === 'LeaveApproved' || r.status === 'LeavePending'
             ).length;
@@ -787,11 +807,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             return (
               <div
                 key={wk}
-                className="rounded-2xl bg-gradient-to-b from-white to-slate-50/90 border border-slate-200/90 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
+                className="rounded-lg bg-gradient-to-b from-white to-slate-50/90 border-2 border-slate-200 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
               >
                 <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-900 text-white text-[11px] font-black shadow-xs">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-slate-900 text-white text-[11px] font-black shadow-xs">
                       W{wk}
                     </span>
                     <span className="text-xs font-extrabold text-slate-900">
@@ -882,12 +902,12 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           return (
             <div
               key={wk}
-              className="rounded-2xl bg-gradient-to-b from-white to-slate-50/90 border border-slate-200/90 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
+              className="rounded-lg bg-gradient-to-b from-white to-slate-50/90 border-2 border-slate-200 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
             >
               {/* Week Header Bar */}
               <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-900 text-white text-[11px] font-black shadow-xs">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-slate-900 text-white text-[11px] font-black shadow-xs">
                     W{wk}
                   </span>
                   <span className="text-xs font-extrabold text-slate-900">
@@ -1398,61 +1418,91 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             </div>
           </div>
 
-          {/* 1st Week, 2nd Week, 3rd Week, 4th Week, 5th Week Cubes */}
+          {/* 1st Week, 2nd Week, 3rd Week, 4th Week, 5th Week Square Box Cards */}
           {(!viewAllMonths || activeSubtab === 'attendance') && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
               <button
                 type="button"
                 onClick={() => setSelectedWeek('all')}
-                className={`cube-3d-tile px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                className={`cube-3d-tile p-3 rounded-lg text-left border-2 transition flex flex-col justify-between min-h-[72px] ${
                   selectedWeek === 'all'
-                    ? 'bg-slate-900 text-white border-slate-900'
-                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                    : 'bg-white text-slate-800 border-slate-300 hover:border-slate-500'
                 }`}
               >
-                {language === 'my' ? 'တစ်လလုံး (All Weeks)' : 'All Weeks'} ·{' '}
-                <span className="tabular-nums">
-                  {activeSubtab === 'tasks'
-                    ? monthTasks.length
-                    : activeSubtab === 'leaves'
-                    ? monthLeaves.length
-                    : activeSubtab === 'attendance'
-                    ? `${monthlyAttendance.officePresentDays}d`
-                    : monthTraining.length}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-extrabold leading-tight">
+                    {language === 'my' ? 'တစ်လလုံး' : 'All Weeks'}
+                  </span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-black tabular-nums ${
+                      selectedWeek === 'all'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 text-slate-800'
+                    }`}
+                  >
+                    {activeSubtab === 'tasks'
+                      ? monthTasks.length
+                      : activeSubtab === 'leaves'
+                      ? monthLeaves.length
+                      : activeSubtab === 'attendance'
+                      ? `${monthlyAttendance.officePresentDays}d`
+                      : monthTraining.length}
+                  </span>
+                </div>
+                <span
+                  className={`text-[10px] font-semibold mt-1.5 ${
+                    selectedWeek === 'all' ? 'text-slate-300' : 'text-slate-500'
+                  }`}
+                >
+                  {language === 'my' ? 'အပတ်အားလုံး' : 'Full Month'}
                 </span>
               </button>
 
               {weeksInMonth.map((wk) => {
                 const wkCount = getRecordCountForWeek(wk);
+                const { startDay, endDay } = getWeekDayRange(selectedMonth, wk);
                 const isSelected = selectedWeek === wk;
+                const activeBoxCls =
+                  activeSubtab === 'tasks'
+                    ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                    : activeSubtab === 'leaves'
+                    ? 'bg-teal-600 text-white border-teal-700 shadow-sm'
+                    : activeSubtab === 'attendance'
+                    ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                    : 'bg-purple-700 text-white border-purple-800 shadow-sm';
+
                 return (
                   <button
                     key={wk}
                     type="button"
                     onClick={() => setSelectedWeek(wk)}
-                    className={`cube-3d-tile px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                    className={`cube-3d-tile p-3 rounded-lg text-left border-2 transition flex flex-col justify-between min-h-[72px] ${
                       isSelected
-                        ? activeSubtab === 'tasks'
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : activeSubtab === 'leaves'
-                          ? 'bg-teal-600 text-white border-teal-600'
-                          : activeSubtab === 'attendance'
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-purple-700 text-white border-purple-700'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        ? activeBoxCls
+                        : 'bg-white text-slate-800 border-slate-300 hover:border-blue-400'
                     }`}
                   >
-                    <span>{getWeekOrdinal(wk)}</span>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-xs font-extrabold">{getWeekOrdinal(wk)}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-black tabular-nums ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : wkCount > 0
+                            ? 'bg-slate-900/10 text-slate-900'
+                            : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {wkCount}
+                      </span>
+                    </div>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold tabular-nums ${
-                        isSelected
-                          ? 'bg-white/20 text-white'
-                          : wkCount > 0
-                          ? 'bg-slate-900/10 text-slate-900'
-                          : 'text-slate-400'
+                      className={`text-[10px] font-semibold tabular-nums mt-1.5 ${
+                        isSelected ? 'text-white/85' : 'text-slate-500'
                       }`}
                     >
-                      {wkCount}
+                      {language === 'my' ? `ရက် ${startDay}–${endDay}` : `Days ${startDay}–${endDay}`}
                     </span>
                   </button>
                 );

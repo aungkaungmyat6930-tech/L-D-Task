@@ -1,4 +1,4 @@
-export type RoleTier = 'ADMIN' | 'MEMBER' | 'VIEWER';
+export type RoleTier = 'SUPER_ADMIN' | 'ADMIN' | 'MEMBER' | 'VIEWER';
 export type MemberStatus = 'Active' | 'Resigned' | 'Transferred' | 'On Leave';
 
 export interface UserProfile {
@@ -16,7 +16,7 @@ export interface UserProfile {
   notes?: string;
 }
 
-export type TaskStatus = 'Active' | 'Waiting' | 'Completed' | 'Cancelled' | 'Overdue';
+export type TaskStatus = 'Active' | 'Pending' | 'Waiting' | 'Completed' | 'Cancelled' | 'Overdue';
 
 export interface TaskComment {
   id: string;
@@ -40,6 +40,11 @@ export interface TaskItem {
   day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
   status: TaskStatus;
   note?: string;
+  completionRequested?: boolean;
+  completionRequestedBy?: string;
+  completionRequestedAt?: string;
+  completionApprovedBy?: string;
+  completionApprovedAt?: string;
   comments: TaskComment[];
   createdAt: string;
 }
@@ -107,7 +112,7 @@ export interface StrategicProject {
   status: 'In Progress' | 'On Track' | 'Final Review' | 'Completed';
 }
 
-export type AttendanceOverrideStatus = 'Office' | 'WFH' | 'Training' | 'Holiday' | 'Absent';
+export type AttendanceOverrideStatus = 'Office' | 'Leave';
 
 export interface AttendanceRecord {
   id: string;

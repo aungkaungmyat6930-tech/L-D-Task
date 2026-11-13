@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, RoleTier, MemberStatus } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { processProfilePhotoFile } from '../utils/imageUpload';
+import { isAdminOrSuper } from '../utils/roleHelpers';
 import { X, UserPen, Check, Camera, Sparkles, Shield, UserCheck, Upload, AlertCircle } from 'lucide-react';
 
 interface ProfileEditModalProps {
@@ -24,7 +25,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const t = TRANSLATIONS[language];
   const targetUser = userToEdit || currentUser;
   const isEditingSelf = currentUser.id === targetUser.id;
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(targetUser.name);
@@ -335,7 +336,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   className="w-full text-xs px-3 py-2 border border-purple-300 bg-purple-50 text-purple-900 rounded-lg font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
                 >
                   <option value="MEMBER">Member (Self-Service)</option>
-                  <option value="ADMIN">Admin (Full Control)</option>
+                  <option value="ADMIN">Admin (Management)</option>
+                  <option value="SUPER_ADMIN">Super Admin (Full Control + Leave Approval)</option>
                   <option value="VIEWER">Viewer (Read-Only)</option>
                 </select>
               </div>

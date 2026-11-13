@@ -18,6 +18,11 @@ import {
   INITIAL_PROJECTS 
 } from './data/initialData';
 import { Language, TRANSLATIONS } from './utils/translations';
+import {
+  isAdminOrSuper,
+  canApproveLeave,
+  canApproveTaskCompletion,
+} from './utils/roleHelpers';
 
 // Components
 import { Header } from './components/Header';
@@ -61,7 +66,22 @@ export default function App() {
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.USERS);
-      return saved ? JSON.parse(saved) : INITIAL_USERS;
+      if (saved) {
+        const parsed: UserProfile[] = JSON.parse(saved);
+        const hasSuperAdmin = parsed.some((u) => u.roleTier === 'SUPER_ADMIN');
+        if (!hasSuperAdmin) {
+          let promoted = false;
+          return parsed.map((u) => {
+            if (!promoted && (u.id === 'u1' || u.roleTier === 'ADMIN')) {
+              promoted = true;
+              return { ...u, roleTier: 'SUPER_ADMIN' as const };
+            }
+            return u;
+          });
+        }
+        return parsed;
+      }
+      return INITIAL_USERS;
     } catch {
       return INITIAL_USERS;
     }
@@ -89,11 +109,15 @@ export default function App() {
       const savedId = localStorage.getItem(STORAGE_KEYS.ACTIVE_USER);
       if (savedId) {
         const found = users.find((u) => u.id === savedId);
-        if (found && (found.roleTier !== 'ADMIN' || unlocked)) {
+        if (found && (!isAdminOrSuper(found.roleTier) || unlocked)) {
           return found;
         }
       }
-      return users.find((u) => u.name === 'Aung Kyaw') || users.find((u) => u.roleTier !== 'ADMIN') || users[0];
+      return (
+        users.find((u) => u.name === 'Aung Kyaw') ||
+        users.find((u) => !isAdminOrSuper(u.roleTier)) ||
+        users[0]
+      );
     } catch {
       return users[0];
     }
@@ -102,7 +126,13 @@ export default function App() {
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TASKS);
-      return saved ? JSON.parse(saved) : INITIAL_TASKS;
+      if (saved) {
+        const parsed: TaskItem[] = JSON.parse(saved);
+        return parsed.map((tk) =>
+          tk.status === 'Waiting' ? { ...tk, status: 'Pending' as const } : tk
+        );
+      }
+      return INITIAL_TASKS;
     } catch {
       return INITIAL_TASKS;
     }
@@ -163,6 +193,14 @@ export default function App() {
   });
 
   const [currentTab, setCurrentTab] = useState<TabType>('directory');
+  const [taskFilterRequest, setTaskFilterRequest] = useState<{
+    filter: 'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed';
+    key: number;
+  } | null>(null);
+  const [leaveFilterRequest, setLeaveFilterRequest] = useState<{
+    filter: 'all' | 'my' | 'pending' | 'approved' | 'rejected' | 'hr-unsynced';
+    key: number;
+  } | null>(null);
 
   // Modal Visibility States
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -195,7 +233,16 @@ export default function App() {
 
   // Quick Direct Action Openers
   const handleOpenAddTask = (targetMember?: UserProfile, defaultDate?: string) => {
-    setActionTargetMember(targetMember || null);
+    if (!targetMember) {
+      setCurrentTab('directory');
+      showToast(
+        language === 'my'
+          ? 'သက်ဆိုင်ရာ ဝန်ထမ်းနာမည် (Member Sheet) ထဲသို့ ဝင်ရောက်ပြီးမှ Task အသစ် ဖြည့်သွင်းနိုင်ပါသည်။'
+          : 'Please open a specific member sheet first to fill in a new task.'
+      );
+      return;
+    }
+    setActionTargetMember(targetMember);
     setActionDefaultDate(defaultDate);
     setTaskToEdit(null);
     setIsTaskModalOpen(true);
@@ -307,19 +354,19 @@ export default function App() {
     }
   }, [users]);
 
-  // Switch Active User (Protected by Admin Password when switching to ADMIN)
+  // Switch Active User (Protected by Admin Password when switching to ADMIN or SUPER_ADMIN)
   const handleSwitchUser = (userId: string) => {
     const found = users.find((u) => u.id === userId);
     if (!found) return;
 
-    if (found.roleTier === 'ADMIN' && !isAdminUnlocked) {
+    if (isAdminOrSuper(found.roleTier) && !isAdminUnlocked) {
       setPendingAdminUser(found);
       setAdminPwdMode('verify');
       setAdminPwdModalOpen(true);
       return;
     }
 
-    if (found.roleTier !== 'ADMIN' && isAdminUnlocked) {
+    if (!isAdminOrSuper(found.roleTier) && isAdminUnlocked) {
       setIsAdminUnlocked(false);
       sessionStorage.removeItem(SESSION_ADMIN_UNLOCKED);
     }
@@ -519,18 +566,90 @@ export default function App() {
     );
   };
 
-  // Add or Update Task
+  // Add or Update Task (Enforce Admin/Super Admin approval for Completed)
   const handleSaveTask = (taskData: Partial<TaskItem>) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
+
+    const resolveStatusFields = (
+      requestedStatus: TaskItem['status'],
+      existing?: TaskItem
+    ): Pick<
+      TaskItem,
+      | 'status'
+      | 'completionRequested'
+      | 'completionRequestedBy'
+      | 'completionRequestedAt'
+      | 'completionApprovedBy'
+      | 'completionApprovedAt'
+    > => {
+      if (requestedStatus === 'Completed') {
+        if (canApproveComplete) {
+          return {
+            status: 'Completed',
+            completionRequested: false,
+            completionRequestedBy: existing?.completionRequestedBy,
+            completionRequestedAt: existing?.completionRequestedAt,
+            completionApprovedBy: currentUser.name,
+            completionApprovedAt: todayStr,
+          };
+        }
+        // Member requested completion -> Pending until Admin / Super Admin approves
+        return {
+          status: 'Pending',
+          completionRequested: true,
+          completionRequestedBy: currentUser.name,
+          completionRequestedAt: todayStr,
+          completionApprovedBy: undefined,
+          completionApprovedAt: undefined,
+        };
+      }
+      return {
+        status: requestedStatus,
+        completionRequested: false,
+        completionRequestedBy: undefined,
+        completionRequestedAt: undefined,
+        completionApprovedBy: undefined,
+        completionApprovedAt: undefined,
+      };
+    };
+
     if (taskData.id) {
-      // Update existing
+      let sentForApproval = false;
       setTasks((prev) =>
-        prev.map((t) => (t.id === taskData.id ? ({ ...t, ...taskData } as TaskItem) : t))
+        prev.map((t) => {
+          if (t.id !== taskData.id) return t;
+          const reqStatus = taskData.status ?? t.status;
+          const statusFields =
+            taskData.status !== undefined
+              ? resolveStatusFields(reqStatus, t)
+              : {
+                  status: t.status,
+                  completionRequested: t.completionRequested,
+                  completionRequestedBy: t.completionRequestedBy,
+                  completionRequestedAt: t.completionRequestedAt,
+                  completionApprovedBy: t.completionApprovedBy,
+                  completionApprovedAt: t.completionApprovedAt,
+                };
+          if (reqStatus === 'Completed' && !canApproveComplete) {
+            sentForApproval = true;
+          }
+          return { ...t, ...taskData, ...statusFields } as TaskItem;
+        })
       );
       showToast(
-        language === 'my' ? 'Task ကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။' : 'Task updated successfully.'
+        sentForApproval
+          ? language === 'my'
+            ? 'ပြီးစီးကြောင်း တောင်းဆိုမှုကို Admin / Super Admin ထံ ပေးပို့ပြီးပါပြီ။ Admin အတည်ပြုမှသာ Completed ဖြစ်ပါမည်။'
+            : 'Completion submitted for Admin / Super Admin approval.'
+          : language === 'my'
+          ? 'Task ကို အောင်မြင်စွာ ပြင်ဆင်ပြီးပါပြီ။'
+          : 'Task updated successfully.'
       );
     } else {
-      // Create new
+      const requestedStatus = taskData.status || 'Active';
+      const statusFields = resolveStatusFields(requestedStatus);
+      const sentForApproval = requestedStatus === 'Completed' && !canApproveComplete;
       const newTask: TaskItem = {
         id: `t-${Date.now()}`,
         title: taskData.title || 'New Task',
@@ -539,17 +658,21 @@ export default function App() {
         coAssigneeIds: taskData.coAssigneeIds,
         coAssigneeNames: taskData.coAssigneeNames,
         projectId: taskData.projectId,
-        due: taskData.due || new Date().toISOString().split('T')[0],
-        followup: taskData.followup || new Date().toISOString().split('T')[0],
+        due: taskData.due || todayStr,
+        followup: taskData.followup || todayStr,
         day: taskData.day || 'Wed',
-        status: taskData.status || 'Active',
+        ...statusFields,
         note: taskData.note || '',
         comments: [],
-        createdAt: new Date().toISOString().split('T')[0],
+        createdAt: todayStr,
       };
       setTasks((prev) => [newTask, ...prev]);
       showToast(
-        language === 'my'
+        sentForApproval
+          ? language === 'my'
+            ? `Task ကို ${newTask.ownerName} အောက်တွင် ထည့်သွင်းပြီး ပြီးစီးမှုအတွက် Admin အတည်ပြုချက် စောင့်ဆိုင်းနေပါသည်။`
+            : `Task added under ${newTask.ownerName} (pending Admin completion approval).`
+          : language === 'my'
           ? `Task အသစ်ကို ${newTask.ownerName} အောက်တွင် ထည့်သွင်းပြီးပါပြီ။`
           : `New task added under ${newTask.ownerName}.`
       );
@@ -588,7 +711,7 @@ export default function App() {
           return {
             ...t,
             comments: updatedComments,
-            note: text, // sync note as latest comment
+            note: text,
           };
         }
         return t;
@@ -615,10 +738,90 @@ export default function App() {
     );
   };
 
-  // Task Comments: Update Status
+  // Task Status Update (Enforces Admin/Super Admin approval for Completed)
   const handleUpdateTaskStatus = (taskId: string, newStatus: TaskItem['status']) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
+
+    if (newStatus === 'Completed' && !canApproveComplete) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                status: 'Pending',
+                completionRequested: true,
+                completionRequestedBy: currentUser.name,
+                completionRequestedAt: todayStr,
+                completionApprovedBy: undefined,
+                completionApprovedAt: undefined,
+              }
+            : t
+        )
+      );
+      showToast(
+        language === 'my'
+          ? 'ပြီးစီးကြောင်း တောင်းဆိုမှုကို Admin / Super Admin ထံ ပေးပို့ပြီးပါပြီ။'
+          : 'Completion request sent to Admin / Super Admin for approval.'
+      );
+      return;
+    }
+
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t))
+      prev.map((t) =>
+        t.id === taskId
+          ? {
+              ...t,
+              status: newStatus,
+              completionRequested: false,
+              completionApprovedBy: newStatus === 'Completed' ? currentUser.name : undefined,
+              completionApprovedAt: newStatus === 'Completed' ? todayStr : undefined,
+            }
+          : t
+      )
+    );
+  };
+
+  // Admin / Super Admin Approve or Return Task Completion
+  const handleApproveTaskCompletion = (taskId: string, approved: boolean) => {
+    if (!canApproveTaskCompletion(currentUser.roleTier)) {
+      showToast(
+        language === 'my'
+          ? 'Admin သို့မဟုတ် Super Admin များသာ Task Completed အတည်ပြုခွင့်ရှိပါသည်။'
+          : 'Only Admin or Super Admin can approve task completion.'
+      );
+      return;
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== taskId) return t;
+        if (approved) {
+          return {
+            ...t,
+            status: 'Completed',
+            completionRequested: false,
+            completionApprovedBy: currentUser.name,
+            completionApprovedAt: todayStr,
+          };
+        }
+        return {
+          ...t,
+          status: 'Active',
+          completionRequested: false,
+          completionApprovedBy: undefined,
+          completionApprovedAt: undefined,
+        };
+      })
+    );
+    showToast(
+      approved
+        ? language === 'my'
+          ? `Task ပြီးစီးမှုကို ${currentUser.name} မှ အတည်ပြု (Completed) ပြီးပါပြီ။`
+          : `Task completion approved by ${currentUser.name}.`
+        : language === 'my'
+        ? `Task ကို In Progress သို့ ပြန်လည်သတ်မှတ်ပြီးပါပြီ။`
+        : `Task returned to In Progress.`
     );
   };
 
@@ -629,30 +832,30 @@ export default function App() {
     );
   };
 
-  // Add or Update Leave (with Admin HR alignment support)
+  // Add or Update Leave (Admin can edit HR alignment fields; ONLY Super Admin can approve/reject)
   const handleSaveLeave = (leaveData: Partial<LeaveRequest>) => {
-    const isAdmin = currentUser.roleTier === 'ADMIN';
+    const isAnyAdmin = isAdminOrSuper(currentUser.roleTier);
+    const canApprove = canApproveLeave(currentUser.roleTier);
     const todayStr = new Date().toISOString().split('T')[0];
 
     if (leaveData.id) {
-      // Edit
       setLeaves((prev) =>
         prev.map((l) => {
           if (l.id !== leaveData.id) return l;
-          const nextStatus = isAdmin && leaveData.status ? leaveData.status : l.status;
-          const statusChangedByAdmin = isAdmin && leaveData.status && leaveData.status !== l.status;
+          const nextStatus = canApprove && leaveData.status ? leaveData.status : l.status;
+          const statusChanged = canApprove && leaveData.status && leaveData.status !== l.status;
           return {
             ...l,
             ...leaveData,
             status: nextStatus,
             approvedBy:
-              statusChangedByAdmin && (nextStatus === 'Approved' || nextStatus === 'Rejected')
+              statusChanged && (nextStatus === 'Approved' || nextStatus === 'Rejected')
                 ? currentUser.name
                 : nextStatus === 'Pending'
                 ? undefined
                 : l.approvedBy,
             approvedAt:
-              statusChangedByAdmin && (nextStatus === 'Approved' || nextStatus === 'Rejected')
+              statusChanged && (nextStatus === 'Approved' || nextStatus === 'Rejected')
                 ? todayStr
                 : nextStatus === 'Pending'
                 ? undefined
@@ -662,14 +865,13 @@ export default function App() {
       );
       showToast(
         language === 'my'
-          ? isAdmin
+          ? isAnyAdmin
             ? 'ခွင့်မှတ်တမ်းနှင့် HR ချိန်ညှိမှုကို သိမ်းဆည်းပြီးပါပြီ။'
             : 'ခွင့်မှတ်တမ်း ပြင်ဆင်ပြီးပါပြီ။'
           : 'Leave record updated.'
       );
     } else {
-      // New
-      const initialStatus = isAdmin && leaveData.status ? leaveData.status : 'Pending';
+      const initialStatus = canApprove && leaveData.status ? leaveData.status : 'Pending';
       const newLeave: LeaveRequest = {
         id: `l-${Date.now()}`,
         memberId: leaveData.memberId || currentUser.id,
@@ -681,16 +883,16 @@ export default function App() {
         reason: leaveData.reason || '',
         status: initialStatus,
         approvedBy:
-          isAdmin && (initialStatus === 'Approved' || initialStatus === 'Rejected')
+          canApprove && (initialStatus === 'Approved' || initialStatus === 'Rejected')
             ? currentUser.name
             : undefined,
         approvedAt:
-          isAdmin && (initialStatus === 'Approved' || initialStatus === 'Rejected')
+          canApprove && (initialStatus === 'Approved' || initialStatus === 'Rejected')
             ? todayStr
             : undefined,
-        hrRefId: isAdmin ? leaveData.hrRefId : undefined,
-        hrSynced: isAdmin ? leaveData.hrSynced : false,
-        adminNote: isAdmin ? leaveData.adminNote : undefined,
+        hrRefId: isAnyAdmin ? leaveData.hrRefId : undefined,
+        hrSynced: isAnyAdmin ? leaveData.hrSynced : false,
+        adminNote: isAnyAdmin ? leaveData.adminNote : undefined,
         createdAt: todayStr,
       };
       setLeaves((prev) => [newLeave, ...prev]);
@@ -710,8 +912,17 @@ export default function App() {
     );
   };
 
-  // Approve or Reject Leave (Admin Action)
+  // Approve or Reject Leave (STRICTLY SUPER_ADMIN ONLY)
   const handleApproveLeave = (leaveId: string, status: 'Approved' | 'Rejected') => {
+    if (!canApproveLeave(currentUser.roleTier)) {
+      showToast(
+        language === 'my'
+          ? 'Super Admin သာလျှင် ခွင့်တောင်းခံလွှာကို Approve / Reject ပြုလုပ်ခွင့်ရှိပါသည်။'
+          : 'Only Super Admin is permitted to approve or reject leave requests.'
+      );
+      return;
+    }
+
     setLeaves((prev) =>
       prev.map((l) => {
         if (l.id === leaveId) {
@@ -727,8 +938,8 @@ export default function App() {
     );
     showToast(
       language === 'my'
-        ? `ခွင့်တောင်းခံလွှာကို ${currentUser.name} မှ "${status === 'Approved' ? 'အတည်ပြု' : 'ငြင်းပယ်'}" လိုက်ပါပြီ။`
-        : `Leave request marked as ${status} by ${currentUser.name}.`
+        ? `ခွင့်တောင်းခံလွှာကို Super Admin (${currentUser.name}) မှ "${status === 'Approved' ? 'အတည်ပြု' : 'ငြင်းပယ်'}" လိုက်ပါပြီ။`
+        : `Leave request marked as ${status} by Super Admin (${currentUser.name}).`
     );
   };
 
@@ -833,7 +1044,7 @@ export default function App() {
   };
 
   const handleToggleAllowMemberDeadlineSetup = (enabled: boolean) => {
-    if (currentUser.roleTier !== 'ADMIN') return;
+    if (!isAdminOrSuper(currentUser.roleTier)) return;
     setAllowMemberDeadlineSetup(enabled);
     showToast(
       language === 'my'
@@ -846,9 +1057,9 @@ export default function App() {
     );
   };
 
-  // Add New Team Member (Onboard - Admin Only)
+  // Add New Team Member (Onboard - Admin / Super Admin Only)
   const handleAddUser = (userData: Partial<UserProfile>) => {
-    if (currentUser.roleTier !== 'ADMIN') {
+    if (!isAdminOrSuper(currentUser.roleTier)) {
       showToast(
         language === 'my'
           ? 'Admin များသာ ဝန်ထမ်းအသစ် ထည့်သွင်းခွင့်ရှိပါသည်။'
@@ -879,9 +1090,9 @@ export default function App() {
     );
   };
 
-  // Update Member Status (Onboard / Offboard / Resign - Admin Only)
+  // Update Member Status (Onboard / Offboard / Resign - Admin / Super Admin Only)
   const handleUpdateMemberStatus = (userId: string, newStatus: MemberStatus) => {
-    if (currentUser.roleTier !== 'ADMIN') {
+    if (!isAdminOrSuper(currentUser.roleTier)) {
       showToast(
         language === 'my'
           ? 'Admin များသာ ဝန်ထမ်းအဝင်/အထွက် အခြေအနေ ပြောင်းလဲခွင့်ရှိပါသည်။'
@@ -927,9 +1138,9 @@ export default function App() {
     );
   };
 
-  // Permanently Delete Team Member (Admin Only)
+  // Permanently Delete Team Member (Admin / Super Admin Only)
   const handleDeleteUser = (userId: string) => {
-    if (currentUser.roleTier !== 'ADMIN') {
+    if (!isAdminOrSuper(currentUser.roleTier)) {
       showToast(
         language === 'my'
           ? 'Admin များသာ ဝန်ထမ်းဖယ်ရှားခွင့်ရှိပါသည်။'
@@ -967,7 +1178,10 @@ export default function App() {
 
   // Calculated Metric Totals
   const activeTasksCount = useMemo(
-    () => tasks.filter((t) => t.status === 'Active' || t.status === 'Waiting').length,
+    () =>
+      tasks.filter(
+        (t) => t.status === 'Active' || t.status === 'Pending' || t.status === 'Waiting'
+      ).length,
     [tasks]
   );
   const overdueTasksCount = useMemo(
@@ -1015,6 +1229,14 @@ export default function App() {
         onLockAdmin={handleLockAdmin}
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
+        onJumpToFiltered={(tab, filter) => {
+          setCurrentTab(tab);
+          if (tab === 'tasks' && filter === 'overdue') {
+            setTaskFilterRequest({ filter: 'overdue', key: Date.now() });
+          } else if (tab === 'leave' && filter === 'pending') {
+            setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
+          }
+        }}
         language={language}
         onToggleLanguage={handleToggleLanguage}
         pendingLeavesCount={pendingLeavesCount}
@@ -1029,7 +1251,14 @@ export default function App() {
           overdueTasksCount={overdueTasksCount}
           pendingLeavesCount={pendingLeavesCount}
           totalTrainingHours={totalTrainingHours}
-          onSelectMetric={(tab) => setCurrentTab(tab)}
+          onSelectMetric={(tab, filter) => {
+            setCurrentTab(tab);
+            if (tab === 'tasks') {
+              setTaskFilterRequest({ filter: filter === 'overdue' ? 'overdue' : 'active', key: Date.now() });
+            } else if (tab === 'leave') {
+              setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
+            }
+          }}
           language={language}
         />
 
@@ -1045,7 +1274,6 @@ export default function App() {
             onNotify={showToast}
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenEditProfile={handleOpenEditProfile}
-            onOpenAddTask={handleOpenAddTask}
             onOpenAddLeave={handleOpenAddLeave}
             onOpenAddTraining={handleOpenAddTraining}
             onOpenAddUser={() => setIsAddUserModalOpen(true)}
@@ -1058,15 +1286,15 @@ export default function App() {
             tasks={tasks}
             currentUser={currentUser}
             allUsers={users}
-            onOpenAddTask={handleOpenAddTask}
-            onOpenAddLeave={handleOpenAddLeave}
-            onOpenAddTraining={handleOpenAddTraining}
+            filterRequest={taskFilterRequest}
+            onGoToDirectory={() => setCurrentTab('directory')}
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenEditTask={(task) => {
               setTaskToEdit(task);
               setIsTaskModalOpen(true);
             }}
             onDeleteTask={handleDeleteTask}
+            onApproveTaskCompletion={handleApproveTaskCompletion}
             onOpenComments={(task) => {
               setSelectedCommentTask(task);
               setIsCommentsModalOpen(true);
@@ -1083,6 +1311,7 @@ export default function App() {
             attendanceOverrides={attendanceOverrides}
             currentUser={currentUser}
             allUsers={users}
+            filterRequest={leaveFilterRequest}
             onOpenAddLeave={handleOpenAddLeave}
             onOpenAddTask={handleOpenAddTask}
             onOpenAddTraining={handleOpenAddTraining}
@@ -1123,12 +1352,12 @@ export default function App() {
             leaves={leaves}
             currentUser={currentUser}
             allUsers={users}
-            onOpenAddTask={handleOpenAddTask}
             onOpenEditTask={(task) => {
               setTaskToEdit(task);
               setIsTaskModalOpen(true);
             }}
             onDeleteTask={handleDeleteTask}
+            onApproveTaskCompletion={handleApproveTaskCompletion}
             onOpenAddLeave={handleOpenAddLeave}
             onOpenEditLeave={(leave) => {
               setLeaveToEdit(leave);
@@ -1158,6 +1387,7 @@ export default function App() {
             onDeleteProject={handleDeleteProject}
             onSaveTask={handleSaveTask}
             onDeleteTask={handleDeleteTask}
+            onApproveTaskCompletion={handleApproveTaskCompletion}
             onOpenComments={(task) => {
               setSelectedCommentTask(task);
               setIsCommentsModalOpen(true);
@@ -1230,6 +1460,7 @@ export default function App() {
           setIsTaskModalOpen(true);
         }}
         onDeleteTask={handleDeleteTask}
+        onApproveTaskCompletion={handleApproveTaskCompletion}
         onOpenComments={(task) => {
           setSelectedCommentTask(task);
           setIsCommentsModalOpen(true);
@@ -1288,6 +1519,7 @@ export default function App() {
         onAddComment={handleAddComment}
         onDeleteComment={handleDeleteComment}
         onUpdateTaskStatus={handleUpdateTaskStatus}
+        onApproveTaskCompletion={handleApproveTaskCompletion}
         onUpdateFollowupDate={handleUpdateFollowupDate}
         language={language}
       />

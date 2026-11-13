@@ -16,19 +16,11 @@ import { Language } from './translations';
 function formatStatusLabel(status: ComputedDayStatus, language: Language): string {
   switch (status) {
     case 'Office':
-      return language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present';
-    case 'WFH':
-      return language === 'my' ? 'အိမ်မှအလုပ်လုပ် (WFH)' : 'Work From Home';
-    case 'Training':
-      return language === 'my' ? 'သင်တန်း / Field' : 'Training Session';
+      return language === 'my' ? 'ရုံးတက် (Office)' : 'Office';
     case 'LeaveApproved':
-      return language === 'my' ? 'ခွင့် (အတည်ပြုပြီး)' : 'On Leave (Approved)';
+      return language === 'my' ? 'ခွင့် (အတည်ပြုပြီး)' : 'Leave (Approved)';
     case 'LeavePending':
-      return language === 'my' ? 'ခွင့် (စောင့်ဆိုင်းဆဲ)' : 'Leave Pending';
-    case 'Holiday':
-      return language === 'my' ? 'ရုံးပိတ်ရက် (Holiday)' : 'Public Holiday';
-    case 'Absent':
-      return language === 'my' ? 'ပျက်ကွက် (Absent)' : 'Absent';
+      return language === 'my' ? 'ခွင့် (စောင့်ဆိုင်းဆဲ)' : 'Leave (Pending)';
     case 'Weekend':
       return language === 'my' ? 'စနေ/တနင်္ဂနွေ' : 'Weekend';
   }
@@ -89,11 +81,7 @@ export function exportMemberMonthlyExcel(params: {
     ['Office Attendance Days (ရုံးတက်ရက်)', summary.officePresentDays],
     ['Approved Leave Days (အတည်ပြုပြီး ခွင့်ရက်)', summary.approvedLeaveDaysInMonth],
     ['Pending Leave Days (စောင့်ဆိုင်းဆဲ ခွင့်ရက်)', summary.pendingLeaveDaysInMonth],
-    ['Work From Home Days', summary.wfhDays],
-    ['Training Days', summary.trainingDays],
     ['Training Hours (Month)', Number(summary.trainingHoursInMonth.toFixed(1))],
-    ['Public Holidays', summary.holidayDays],
-    ['Absent Days', summary.absentDays],
     ['Total Tasks (All)', memberTasks.length],
     ['Completed Tasks', memberTasks.filter((t) => t.status === 'Completed').length],
   ];
@@ -272,8 +260,6 @@ export function exportAllMembersMonthlyExcel(params: {
         'Office Attendance Days (ရုံးတက်ရက်)': summary.officePresentDays,
         'Approved Leave Days (ခွင့်ရက်)': summary.approvedLeaveDaysInMonth,
         'Pending Leave Days': summary.pendingLeaveDaysInMonth,
-        'WFH Days': summary.wfhDays,
-        'Training Days': summary.trainingDays,
         'Training Hours (Month)': Number(summary.trainingHoursInMonth.toFixed(1)),
         'Total Tasks': uTasks.length,
         'Completed Tasks': uTasks.filter((t) => t.status === 'Completed').length,
@@ -291,8 +277,6 @@ export function exportAllMembersMonthlyExcel(params: {
     { wch: 28 },
     { wch: 24 },
     { wch: 18 },
-    { wch: 10 },
-    { wch: 13 },
     { wch: 18 },
     { wch: 12 },
     { wch: 15 },

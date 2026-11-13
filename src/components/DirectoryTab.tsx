@@ -10,6 +10,7 @@ import {
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { computeMemberMonthlyAttendance } from '../utils/attendanceHelpers';
 import { exportAllMembersMonthlyExcel } from '../utils/excelExport';
+import { isAdminOrSuper } from '../utils/roleHelpers';
 import { 
   Users, 
   ArrowRight, 
@@ -17,7 +18,8 @@ import {
   UserPlus, 
   Plus,
   FileSpreadsheet,
-  BellRing
+  BellRing,
+  Crown
 } from 'lucide-react';
 
 interface DirectoryTabProps {
@@ -30,7 +32,6 @@ interface DirectoryTabProps {
   onNotify?: (msg: string) => void;
   onOpenMemberSheet: (member: UserProfile) => void;
   onOpenEditProfile: (user?: UserProfile) => void;
-  onOpenAddTask: (targetMember?: UserProfile) => void;
   onOpenAddLeave: (targetMember?: UserProfile) => void;
   onOpenAddTraining: (targetMember?: UserProfile) => void;
   onOpenAddUser: () => void;
@@ -47,7 +48,6 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   onNotify,
   onOpenMemberSheet,
   onOpenEditProfile,
-  onOpenAddTask,
   onOpenAddLeave,
   onOpenAddTraining,
   onOpenAddUser,
@@ -57,7 +57,7 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   const [memberFilter, setMemberFilter] = useState<'all' | 'active' | 'resigned'>('all');
   const [reportMonth, setReportMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
 
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
   const todayStr = new Date().toISOString().split('T')[0];
 
   const handleExportAllExcel = () => {
@@ -239,15 +239,18 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
 
                     <div className="flex flex-col items-end gap-1">
                       <span
-                        className={`text-[9px] font-extrabold px-2 py-0.5 rounded ${
-                          user.roleTier === 'ADMIN'
+                        className={`text-[9px] font-extrabold px-2 py-0.5 rounded inline-flex items-center gap-1 ${
+                          user.roleTier === 'SUPER_ADMIN'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : user.roleTier === 'ADMIN'
                             ? 'bg-purple-100 text-purple-800'
                             : user.roleTier === 'VIEWER'
                             ? 'bg-slate-100 text-slate-600'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {user.roleTier}
+                        {user.roleTier === 'SUPER_ADMIN' && <Crown className="w-2.5 h-2.5 text-amber-700" />}
+                        <span>{user.roleTier === 'SUPER_ADMIN' ? 'SUPER ADMIN' : user.roleTier}</span>
                       </span>
                       {isResigned ? (
                         <span className="text-[9px] font-bold bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.2 rounded">
@@ -319,20 +322,8 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                   </div>
                 </div>
 
-                {/* Direct 1-Click Action Buttons for this Member (အပေါ်မှရွေးစရာမလိုဘဲ တိုက်ရိုက်ထည့်ရန်) */}
+                {/* Direct Leave & Topic actions; Tasks are added inside the Member Sheet */}
                 <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenAddTask(user);
-                    }}
-                    className="flex-1 py-1.5 px-1 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-0.5 border border-blue-200 hover:border-blue-600 shadow-xs"
-                    title={`+ Add Task for ${user.name}`}
-                  >
-                    <Plus className="w-3 h-3 shrink-0" />
-                    <span>Task</span>
-                  </button>
-
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

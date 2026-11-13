@@ -18,6 +18,7 @@ import {
   formatMonthLabel,
 } from '../utils/weekHelpers';
 import { computeMemberMonthlyAttendance, ComputedDayStatus } from '../utils/attendanceHelpers';
+import { isAdminOrSuper } from '../utils/roleHelpers';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface TrainingTeamAttendanceMatrixProps {
@@ -63,7 +64,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
   const rawWeek = controlledWeek ?? internalWeek;
   const safeWeek: WeekNumber = weeksInMonth.includes(rawWeek) ? rawWeek : 1;
 
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
 
   const teamMembers = useMemo(
@@ -99,18 +100,10 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
     switch (status) {
       case 'Office':
         return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'WFH':
-        return 'bg-sky-50 text-sky-800 border-sky-200';
-      case 'Training':
-        return 'bg-purple-50 text-purple-800 border-purple-200';
       case 'LeaveApproved':
         return 'bg-teal-100 text-teal-900 border-teal-300 font-bold';
       case 'LeavePending':
         return 'bg-amber-100 text-amber-900 border-amber-300 font-bold';
-      case 'Holiday':
-        return 'bg-indigo-50 text-indigo-800 border-indigo-200';
-      case 'Absent':
-        return 'bg-red-100 text-red-800 border-red-300 font-bold';
       case 'Weekend':
         return 'bg-slate-100 text-slate-500 border-slate-200';
     }
@@ -120,18 +113,10 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
     switch (status) {
       case 'Office':
         return language === 'my' ? 'ရုံးတက်' : 'Office';
-      case 'WFH':
-        return 'WFH';
-      case 'Training':
-        return language === 'my' ? 'သင်တန်း' : 'Training';
       case 'LeaveApproved':
         return language === 'my' ? 'ခွင့် (OK)' : 'Leave';
       case 'LeavePending':
         return language === 'my' ? 'ခွင့် (Pending)' : 'Pending';
-      case 'Holiday':
-        return language === 'my' ? 'ပိတ်ရက်' : 'Holiday';
-      case 'Absent':
-        return language === 'my' ? 'ပျက်ကွက်' : 'Absent';
       case 'Weekend':
         return language === 'my' ? 'ပိတ်ရက်' : 'Wknd';
     }
@@ -151,17 +136,14 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
           </h3>
           <p className="text-[11px] text-slate-300 mt-0.5">
             {language === 'my'
-              ? 'နေ့ရက်အလိုက် ရုံးတက်၊ WFH၊ သင်တန်း၊ ခွင့်ရက်များကို ပြသထားပြီး Admin/ကိုယ်တိုင်က တိုက်ရိုက်ပြင်ဆင်နိုင်ပါသည်'
-              : 'Daily attendance across Office, WFH, Training, and Leaves (click cell status to override or adjust)'}
+              ? 'နေ့ရက်အလိုက် ရုံးတက် (Office) နှင့် ခွင့်ရက် (Leave) များကို ပြသထားပြီး Admin/ကိုယ်တိုင်က တိုက်ရိုက်ပြင်ဆင်နိုင်ပါသည်'
+              : 'Daily attendance tracking Office and Leave status (click cell to adjust)'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
           <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
-            {language === 'my' ? 'ရုံးတက်' : 'Office'}
-          </span>
-          <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-200 border border-purple-400/30">
-            {language === 'my' ? 'သင်တန်း' : 'Training'}
+            {language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}
           </span>
           <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-200 border border-teal-400/30">
             {language === 'my' ? 'ခွင့် (Approved)' : 'Approved Leave'}
@@ -243,9 +225,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
           <tbody className="divide-y divide-slate-100">
             {memberSummaries.map(({ member, summary }) => {
               const weekRows = summary.dailyRows.filter((r) => r.week === safeWeek);
-              const wkOffice = weekRows.filter(
-                (r) => r.status === 'Office' || r.status === 'WFH' || r.status === 'Training'
-              ).length;
+              const wkOffice = weekRows.filter((r) => r.status === 'Office').length;
               const wkLeave = weekRows.filter(
                 (r) => r.status === 'LeaveApproved' || r.status === 'LeavePending'
               ).length;
@@ -309,15 +289,8 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                             <option value="Office">
                               {language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}
                             </option>
-                            <option value="WFH">WFH</option>
-                            <option value="Training">
-                              {language === 'my' ? 'သင်တန်း' : 'Training'}
-                            </option>
-                            <option value="Holiday">
-                              {language === 'my' ? 'ပိတ်ရက်' : 'Holiday'}
-                            </option>
-                            <option value="Absent">
-                              {language === 'my' ? 'ပျက်ကွက်' : 'Absent'}
+                            <option value="Leave">
+                              {language === 'my' ? 'ခွင့် (Leave)' : 'Leave'}
                             </option>
                           </select>
                         ) : (

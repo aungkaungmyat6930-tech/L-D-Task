@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { StrategicProject, TaskItem, TaskStatus, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { getDayOfWeekCode } from '../utils/weekHelpers';
+import { isAdminOrSuper, canApproveTaskCompletion } from '../utils/roleHelpers';
 import {
   FolderKanban,
   Plus,
@@ -38,6 +39,7 @@ interface ProjectsTabProps {
   onDeleteTask: (taskId: string) => void;
   onOpenComments: (task: TaskItem) => void;
   onOpenMemberSheet: (member: UserProfile) => void;
+  onApproveTaskCompletion: (taskId: string, approved: boolean) => void;
   language: Language;
 }
 
@@ -62,10 +64,12 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
   onDeleteTask,
   onOpenComments,
   onOpenMemberSheet,
+  onApproveTaskCompletion,
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
   const canSetupDeadline = !isViewer && (isAdmin || allowMemberDeadlineSetup);
   const todayStr = new Date().toISOString().split('T')[0];
@@ -208,7 +212,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
     setTaskCoIds(task.coAssigneeIds || []);
     setTaskDue(task.due);
     setTaskFollowup(task.followup);
-    setTaskStatus(task.status);
+    setTaskStatus(task.status === 'Waiting' ? 'Pending' : task.status);
     setTaskNote(task.note || '');
     setIsTaskModalOpen(true);
   };
@@ -1166,16 +1170,26 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     Status
                   </label>
                   <select
-                    value={taskStatus}
+                    value={taskStatus === 'Waiting' ? 'Pending' : taskStatus}
                     onChange={(e) => setTaskStatus(e.target.value as TaskStatus)}
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-semibold"
                   >
                     <option value="Active">{t.inProgress}</option>
-                    <option value="Waiting">{t.waiting}</option>
+                    <option value="Pending">{t.waiting}</option>
                     <option value="Completed">{t.completed}</option>
-                    <option value="Overdue">{t.overdue}</option>
-                    <option value="Cancelled">{t.cancelled}</option>
+                    {taskStatus === 'Overdue' && (
+                      <option value="Overdue" disabled>
+                        {t.overdue}
+                      </option>
+                    )}
                   </select>
+                  {currentUser.roleTier === 'MEMBER' && taskStatus === 'Completed' && (
+                    <p className="text-[10px] text-amber-700 font-semibold mt-1">
+                      {language === 'my'
+                        ? 'Admin / Super Admin အတည်ပြုပြီးမှ Completed ဖြစ်ပါမည်။'
+                        : 'Admin / Super Admin approval required before Completed.'}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1686,6 +1700,11 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                                         Follow-up Due
                                       </span>
                                     )}
+                                    {tk.completionRequested && tk.status !== 'Completed' && (
+                                      <span className="text-[9px] font-bold text-purple-800 bg-purple-100 border border-purple-200 px-1.5 py-0.5 rounded">
+                                        {language === 'my' ? 'ပြီးစီးမှု အတည်ပြုရန်' : 'Completion Pending Approval'}
+                                      </span>
+                                    )}
                                   </div>
                                   {tk.note && (
                                     <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
@@ -1757,32 +1776,56 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                                 </td>
                                 <td className="border border-slate-300 px-2.5 py-2 align-top">
                                   {!isViewer ? (
-                                    <select
-                                      value={tk.status}
-                                      onChange={(e) =>
-                                        onSaveTask({
-                                          ...tk,
-                                          status: e.target.value as TaskStatus,
-                                        })
-                                      }
-                                      className={`w-full text-[11px] font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
-                                        tk.status === 'Completed'
-                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                          : tk.status === 'Overdue'
-                                          ? 'bg-red-100 text-red-800 border-red-300'
-                                          : tk.status === 'Waiting'
-                                          ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                          : tk.status === 'Cancelled'
-                                          ? 'bg-slate-200 text-slate-700 border-slate-300'
-                                          : 'bg-blue-100 text-blue-800 border-blue-300'
-                                      }`}
-                                    >
-                                      <option value="Active">{t.inProgress}</option>
-                                      <option value="Waiting">{t.waiting}</option>
-                                      <option value="Completed">{t.completed}</option>
-                                      <option value="Overdue">{t.overdue}</option>
-                                      <option value="Cancelled">{t.cancelled}</option>
-                                    </select>
+                                    <div className="space-y-1">
+                                      <select
+                                        value={tk.status === 'Waiting' ? 'Pending' : tk.status}
+                                        onChange={(e) =>
+                                          onSaveTask({
+                                            ...tk,
+                                            status: e.target.value as TaskStatus,
+                                          })
+                                        }
+                                        className={`w-full text-[11px] font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
+                                          tk.status === 'Completed'
+                                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                            : tk.status === 'Overdue'
+                                            ? 'bg-red-100 text-red-800 border-red-300'
+                                            : tk.status === 'Pending' || tk.status === 'Waiting'
+                                            ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                            : 'bg-blue-100 text-blue-800 border-blue-300'
+                                        }`}
+                                      >
+                                        <option value="Active">{t.inProgress}</option>
+                                        <option value="Pending">{t.waiting}</option>
+                                        <option value="Completed">{t.completed}</option>
+                                        {tk.status === 'Overdue' && (
+                                          <option value="Overdue" disabled>
+                                            {t.overdue}
+                                          </option>
+                                        )}
+                                      </select>
+                                      {tk.completionRequested && tk.status !== 'Completed' && canApproveComplete && (
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            onClick={() => onApproveTaskCompletion(tk.id, true)}
+                                            className="flex-1 inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold rounded transition"
+                                            title={language === 'my' ? 'Completed အတည်ပြုမည်' : 'Approve Complete'}
+                                          >
+                                            <Check className="w-2.5 h-2.5" />
+                                            <span>{language === 'my' ? 'အတည်ပြု' : 'Approve'}</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => onApproveTaskCompletion(tk.id, false)}
+                                            className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[9px] font-bold rounded transition"
+                                            title={language === 'my' ? 'ပြန်ပို့မည်' : 'Return to In Progress'}
+                                          >
+                                            <X className="w-2.5 h-2.5" />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
                                   ) : (
                                     <span
                                       className={`inline-block text-[10px] font-extrabold px-2 py-0.5 rounded ${
@@ -1790,12 +1833,16 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                                           ? 'bg-emerald-100 text-emerald-800'
                                           : tk.status === 'Overdue'
                                           ? 'bg-red-100 text-red-800'
-                                          : tk.status === 'Waiting'
+                                          : tk.status === 'Pending' || tk.status === 'Waiting'
                                           ? 'bg-amber-100 text-amber-800'
                                           : 'bg-blue-100 text-blue-800'
                                       }`}
                                     >
-                                      {tk.status}
+                                      {tk.status === 'Active'
+                                        ? 'In Progress'
+                                        : tk.status === 'Waiting' || tk.status === 'Pending'
+                                        ? 'Pending'
+                                        : tk.status}
                                     </span>
                                   )}
                                 </td>

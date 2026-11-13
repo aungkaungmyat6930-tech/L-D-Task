@@ -7,7 +7,10 @@ interface MetricsOverviewProps {
   overdueTasksCount: number;
   pendingLeavesCount: number;
   totalTrainingHours: number;
-  onSelectMetric: (tab: 'tasks' | 'leave' | 'training') => void;
+  onSelectMetric: (
+    tab: 'tasks' | 'leave' | 'training',
+    filter?: 'active' | 'overdue' | 'pending'
+  ) => void;
   language: Language;
 }
 
@@ -25,7 +28,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {/* Active Tasks */}
       <div
-        onClick={() => onSelectMetric('tasks')}
+        onClick={() => onSelectMetric('tasks', 'active')}
         className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
       >
         <div>
@@ -46,7 +49,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
 
       {/* Overdue Tasks */}
       <div
-        onClick={() => onSelectMetric('tasks')}
+        onClick={() => onSelectMetric('tasks', 'overdue')}
         className={`p-4 rounded-xl border shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group ${
           overdueTasksCount > 0
             ? 'bg-red-50/40 border-red-200 ring-1 ring-red-400/20'
@@ -74,7 +77,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
 
       {/* Pending Leaves */}
       <div
-        onClick={() => onSelectMetric('leave')}
+        onClick={() => onSelectMetric('leave', 'pending')}
         className={`p-4 rounded-xl border shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group ${
           pendingLeavesCount > 0
             ? 'bg-purple-50/40 border-purple-200 ring-1 ring-purple-400/20'

@@ -55,7 +55,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDue(taskToEdit.due);
       setFollowup(taskToEdit.followup);
       setDay(taskToEdit.day || getDayOfWeekCode(taskToEdit.due));
-      setStatus(taskToEdit.status);
+      setStatus(taskToEdit.status === 'Waiting' ? 'Pending' : taskToEdit.status);
       setNote(taskToEdit.note || '');
     } else {
       const initDate = defaultDate || new Date().toISOString().split('T')[0];
@@ -172,8 +172,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </label>
               <select
                 value={ownerId}
+                disabled={!taskToEdit && !!targetMember}
                 onChange={(e) => setOwnerId(e.target.value)}
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium bg-white"
+                className={`w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium ${
+                  !taskToEdit && !!targetMember ? 'bg-slate-100 text-slate-600 cursor-not-allowed' : 'bg-white'
+                }`}
               >
                 {allUsers
                   .filter((u) => u.roleTier !== 'VIEWER')
@@ -183,6 +186,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </option>
                   ))}
               </select>
+              {!taskToEdit && !!targetMember && (
+                <span className="text-[10px] text-blue-700 font-medium block mt-0.5">
+                  {language === 'my'
+                    ? `${targetMember.name} ၏ Member Sheet ထဲမှ ထည့်သွင်းနေပါသည်`
+                    : `Locked to ${targetMember.name}'s Member Sheet`}
+                </span>
+              )}
             </div>
 
             <div>
@@ -290,16 +300,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               {t.status}
             </label>
             <select
-              value={status}
+              value={status === 'Waiting' ? 'Pending' : status}
               onChange={(e) => setStatus(e.target.value as TaskItem['status'])}
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
             >
               <option value="Active">{t.inProgress}</option>
-              <option value="Waiting">{t.waiting}</option>
+              <option value="Pending">{t.waiting}</option>
               <option value="Completed">{t.completed}</option>
-              <option value="Overdue">{t.overdue}</option>
-              <option value="Cancelled">{t.cancelled}</option>
+              {status === 'Overdue' && (
+                <option value="Overdue" disabled>
+                  {t.overdue}
+                </option>
+              )}
             </select>
+            {currentUser.roleTier === 'MEMBER' && status === 'Completed' && (
+              <p className="mt-1.5 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                {language === 'my'
+                  ? 'Member မှ Completed ရွေးချယ်ပါက Admin / Super Admin အတည်ပြုပြီးမှသာ Complete ဖြစ်ပါမည်။'
+                  : 'Selecting Completed as a Member submits for Admin / Super Admin approval before marking Completed.'}
+              </p>
+            )}
           </div>
 
           {/* Follow-up / Progress Note */}

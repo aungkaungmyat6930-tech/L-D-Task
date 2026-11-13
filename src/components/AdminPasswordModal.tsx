@@ -113,7 +113,7 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
               <p className="text-[11px] text-slate-300">
                 {activeMode === 'verify'
                   ? targetAdminName
-                    ? `${targetAdminName} (ADMIN)`
+                    ? `${targetAdminName} (Admin Access)`
                     : 'Admin Authentication'
                   : language === 'my'
                   ? 'လုံခြုံရေးအတွက် Admin Password အသစ်ပြောင်းလဲခြင်း'

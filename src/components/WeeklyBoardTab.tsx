@@ -15,6 +15,11 @@ import {
   getDefaultDateForMonthWeek,
 } from '../utils/weekHelpers';
 import {
+  isAdminOrSuper,
+  canApproveLeave,
+  canApproveTaskCompletion,
+} from '../utils/roleHelpers';
+import {
   Calendar,
   MessageSquare,
   Plus,
@@ -37,9 +42,9 @@ interface WeeklyBoardTabProps {
   leaves: LeaveRequest[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
-  onOpenAddTask: (targetMember?: UserProfile, defaultDate?: string) => void;
   onOpenEditTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
+  onApproveTaskCompletion: (taskId: string, approved: boolean) => void;
   onOpenAddLeave: (targetMember?: UserProfile, defaultDate?: string) => void;
   onOpenEditLeave: (leave: LeaveRequest) => void;
   onApproveLeave: (leaveId: string, status: 'Approved' | 'Rejected') => void;
@@ -54,9 +59,9 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
   leaves,
   currentUser,
   allUsers,
-  onOpenAddTask,
   onOpenEditTask,
   onDeleteTask,
+  onApproveTaskCompletion,
   onOpenAddLeave,
   onOpenEditLeave,
   onApproveLeave,
@@ -66,7 +71,9 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApproveLeaves = canApproveLeave(currentUser.roleTier);
+  const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -121,7 +128,9 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
   const weeklySummaryStats = useMemo(() => {
     const weekTasks = tasks.filter((item) => item.due >= weekStartStr && item.due <= weekEndStr);
-    const activeTasks = scopedTasks.filter((item) => item.status === 'Active' || item.status === 'Waiting').length;
+    const activeTasks = scopedTasks.filter(
+      (item) => item.status === 'Active' || item.status === 'Pending' || item.status === 'Waiting'
+    ).length;
     const completedTasks = scopedTasks.filter((item) => item.status === 'Completed').length;
     const overdueTasks = scopedTasks.filter((item) => item.status === 'Overdue').length;
     const approvedWeekLeaves = weekOverlappingLeaves.filter((l) => l.status === 'Approved').length;
@@ -159,33 +168,18 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
           <div className="flex flex-wrap items-center gap-2">
             {!isViewer && (
-              <>
-                <button
-                  onClick={() =>
-                    onOpenAddLeave(
-                      currentUser,
-                      getDefaultDateForMonthWeek(selectedMonth, safeWeek)
-                    )
-                  }
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{t.addMyLeave}</span>
-                </button>
-
-                <button
-                  onClick={() =>
-                    onOpenAddTask(
-                      undefined,
-                      getDefaultDateForMonthWeek(selectedMonth, safeWeek)
-                    )
-                  }
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{t.addMyTask}</span>
-                </button>
-              </>
+              <button
+                onClick={() =>
+                  onOpenAddLeave(
+                    currentUser,
+                    getDefaultDateForMonthWeek(selectedMonth, safeWeek)
+                  )
+                }
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl shadow-sm transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t.addMyLeave}</span>
+              </button>
             )}
           </div>
         </div>
@@ -513,7 +507,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-                        {isAdmin && leave.status === 'Pending' && (
+                        {canApproveLeaves && leave.status === 'Pending' && (
                           <>
                             <button
                               type="button"
@@ -532,6 +526,11 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                               <span>{t.reject}</span>
                             </button>
                           </>
+                        )}
+                        {isAdmin && !canApproveLeaves && leave.status === 'Pending' && (
+                          <span className="px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold">
+                            {language === 'my' ? 'Super Admin အတည်ပြုရန်' : 'Super Admin Approval'}
+                          </span>
                         )}
 
                         {canEdit && (
@@ -653,24 +652,48 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                                 : 'border-slate-200'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-1">
                               <span
                                 className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
                                   task.status === 'Completed'
                                     ? 'bg-emerald-100 text-emerald-800'
                                     : task.status === 'Overdue'
                                     ? 'bg-red-100 text-red-800'
-                                    : task.status === 'Waiting'
+                                    : task.status === 'Pending' || task.status === 'Waiting'
                                     ? 'bg-amber-100 text-amber-800'
                                     : 'bg-blue-100 text-blue-800'
                                 }`}
                               >
-                                {task.status}
+                                {task.status === 'Active'
+                                  ? 'In Progress'
+                                  : task.status === 'Waiting' || task.status === 'Pending'
+                                  ? 'Pending'
+                                  : task.status}
                               </span>
                               <span className="text-[10px] text-slate-400 tabular-nums">
                                 {task.due}
                               </span>
                             </div>
+
+                            {task.completionRequested && (
+                              <div className="flex items-center justify-between gap-1 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
+                                <span className="text-[9px] font-bold text-amber-800">
+                                  {language === 'my' ? 'Complete အတည်ပြုရန်' : 'Pending Approval'}
+                                </span>
+                                {canApproveComplete && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onApproveTaskCompletion(task.id, true);
+                                    }}
+                                    className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[9px] transition"
+                                  >
+                                    {language === 'my' ? 'အတည်ပြု' : 'Approve'}
+                                  </button>
+                                )}
+                              </div>
+                            )}
 
                             <h5 className="text-xs font-bold text-slate-900 line-clamp-2 leading-snug">
                               {task.title}

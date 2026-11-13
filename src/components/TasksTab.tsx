@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TaskItem, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { 
-  CheckSquare, 
-  Plus, 
-  MessageSquare, 
-  Edit3, 
-  Trash2, 
-  Search, 
-  AlertTriangle, 
-  Clock, 
-  CheckCircle, 
-  Filter 
+import { isAdminOrSuper, canApproveTaskCompletion } from '../utils/roleHelpers';
+import {
+  CheckSquare,
+  MessageSquare,
+  Edit3,
+  Trash2,
+  Search,
+  CheckCircle2,
+  RotateCcw,
+  Users,
+  Clock,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -19,12 +19,15 @@ interface TasksTabProps {
   tasks: TaskItem[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
-  onOpenAddTask: (targetMember?: UserProfile) => void;
-  onOpenAddLeave: (targetMember?: UserProfile) => void;
-  onOpenAddTraining: (targetMember?: UserProfile) => void;
+  filterRequest?: {
+    filter: 'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed';
+    key: number;
+  } | null;
+  onGoToDirectory: () => void;
   onOpenMemberSheet: (member: UserProfile) => void;
   onOpenEditTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
+  onApproveTaskCompletion: (taskId: string, approved: boolean) => void;
   onOpenComments: (task: TaskItem) => void;
   language: Language;
 }
@@ -33,24 +36,37 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   tasks,
   currentUser,
   allUsers,
-  onOpenAddTask,
+  filterRequest,
+  onGoToDirectory,
   onOpenMemberSheet,
   onOpenEditTask,
   onDeleteTask,
+  onApproveTaskCompletion,
   onOpenComments,
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const [filter, setFilter] = useState<'all' | 'my' | 'overdue' | 'active' | 'waiting' | 'completed'>('all');
+  const [filter, setFilter] = useState<
+    'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed'
+  >('all');
   const [search, setSearch] = useState('');
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
 
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  useEffect(() => {
+    if (filterRequest) {
+      setFilter(filterRequest.filter);
+    }
+  }, [filterRequest]);
+
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
+
+  const isPendingTask = (task: TaskItem) =>
+    task.status === 'Pending' || task.status === 'Waiting';
 
   // Filter tasks
   const filteredTasks = tasks.filter((task) => {
-    // 1. Tab Status Filter
     if (filter === 'my') {
       const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
       if (!isMyTask) return false;
@@ -58,13 +74,12 @@ export const TasksTab: React.FC<TasksTabProps> = ({
       if (task.status !== 'Overdue') return false;
     } else if (filter === 'active') {
       if (task.status !== 'Active') return false;
-    } else if (filter === 'waiting') {
-      if (task.status !== 'Waiting') return false;
+    } else if (filter === 'pending') {
+      if (!isPendingTask(task)) return false;
     } else if (filter === 'completed') {
       if (task.status !== 'Completed') return false;
     }
 
-    // 2. Search Query
     if (search.trim()) {
       const q = search.toLowerCase();
       const matchTitle = task.title.toLowerCase().includes(q);
@@ -87,25 +102,22 @@ export const TasksTab: React.FC<TasksTabProps> = ({
           </h2>
           <p className="text-xs text-slate-500">
             {language === 'my'
-              ? 'ကိုယ့်နာမည်ဖြင့် Task အသစ်ထည့်ရန်၊ ပြင်ဆင်ရန်၊ အလွယ်တကူ ပြန်ဖျက်ရန်နှင့် မှတ်ချက် ရေးသားရန်'
-              : 'Add, edit, delete tasks under your name, and write discussion comments'}
+              ? 'Task အသစ်များကို L&D Team Directory ထဲရှိ သက်ဆိုင်ရာအဖွဲ့ဝင် Member Sheet မှသာ ဝင်ရောက်ဖြည့်သွင်းနိုင်ပါသည်။ Completed ဖြစ်ရန် Admin / Super Admin အတည်ပြုချက် လိုအပ်ပါသည်။'
+              : 'Add new tasks directly inside the assigned member’s Member Sheet. Completed status requires Admin / Super Admin approval.'}
           </p>
         </div>
 
-        {!isViewer && (
-          <button
-            onClick={() => onOpenAddTask()}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
-          >
-            <Plus className="w-4 h-4" />
-            <span>{t.addMyTask}</span>
-          </button>
-        )}
+        <button
+          onClick={onGoToDirectory}
+          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
+        >
+          <Users className="w-4 h-4" />
+          <span>{language === 'my' ? 'Member Sheet မှ Task ထည့်ရန်' : 'Open Member Sheets'}</span>
+        </button>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm text-xs">
-        {/* Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setFilter('all')}
@@ -125,7 +137,8 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            {language === 'my' ? 'ကိုယ့် Task' : 'My Tasks'} ({tasks.filter((t) => t.ownerId === currentUser.id || t.ownerName === currentUser.name).length})
+            {language === 'my' ? 'ကိုယ့် Task' : 'My Tasks'} (
+            {tasks.filter((t) => t.ownerId === currentUser.id || t.ownerName === currentUser.name).length})
           </button>
           <button
             onClick={() => setFilter('overdue')}
@@ -148,14 +161,14 @@ export const TasksTab: React.FC<TasksTabProps> = ({
             {t.inProgress} ({tasks.filter((t) => t.status === 'Active').length})
           </button>
           <button
-            onClick={() => setFilter('waiting')}
+            onClick={() => setFilter('pending')}
             className={`px-3 py-1.5 rounded-lg font-bold transition ${
-              filter === 'waiting'
+              filter === 'pending'
                 ? 'bg-amber-500 text-white shadow-xs'
                 : 'text-amber-700 hover:bg-amber-50'
             }`}
           >
-            {t.waiting} ({tasks.filter((t) => t.status === 'Waiting').length})
+            {t.waiting} ({tasks.filter(isPendingTask).length})
           </button>
           <button
             onClick={() => setFilter('completed')}
@@ -209,6 +222,12 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                   const isOverdue = task.status === 'Overdue';
                   const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
                   const canEdit = (isMyTask || isAdmin) && !isViewer;
+                  const displayStatus =
+                    task.status === 'Active'
+                      ? 'In Progress'
+                      : task.status === 'Waiting' || task.status === 'Pending'
+                      ? 'Pending'
+                      : task.status;
 
                   return (
                     <tr
@@ -221,7 +240,6 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                         <span className="block">{task.title}</span>
                       </td>
 
-                      {/* Clean Assignee cell without +task, +leave, +topic clutter */}
                       <td className="py-3.5 px-4">
                         <button
                           type="button"
@@ -253,18 +271,31 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
                       <td className="py-3.5 px-4">
                         <span
-                          className={`text-[10px] font-bold px-2.5 py-1 rounded ${
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded inline-block ${
                             task.status === 'Completed'
                               ? 'bg-emerald-100 text-emerald-800'
                               : task.status === 'Overdue'
                               ? 'bg-red-100 text-red-800'
-                              : task.status === 'Waiting'
+                              : isPendingTask(task)
                               ? 'bg-amber-100 text-amber-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {task.status}
+                          {displayStatus}
                         </span>
+                        {task.completionRequested && (
+                          <span className="mt-1 flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded w-fit">
+                            <Clock className="w-3 h-3" />
+                            <span>
+                              {language === 'my' ? 'Admin အတည်ပြုရန်' : 'Pending Approval'}
+                            </span>
+                          </span>
+                        )}
+                        {task.status === 'Completed' && task.completionApprovedBy && (
+                          <span className="block text-[10px] text-emerald-700 mt-0.5">
+                            ✓ {task.completionApprovedBy}
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-slate-500 max-w-xs truncate">
@@ -273,7 +304,26 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Comments button with badge */}
+                          {canApproveComplete && task.completionRequested && (
+                            <>
+                              <button
+                                onClick={() => onApproveTaskCompletion(task.id, true)}
+                                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-xs transition"
+                                title={language === 'my' ? 'ပြီးစီးကြောင်း အတည်ပြုရန်' : 'Approve Complete'}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{language === 'my' ? 'Complete အတည်ပြု' : 'Approve'}</span>
+                              </button>
+                              <button
+                                onClick={() => onApproveTaskCompletion(task.id, false)}
+                                className="flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] transition"
+                                title={language === 'my' ? 'In Progress သို့ ပြန်ပို့ရန်' : 'Return to In Progress'}
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+
                           <button
                             onClick={() => onOpenComments(task)}
                             className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
@@ -314,7 +364,6 @@ export const TasksTab: React.FC<TasksTabProps> = ({
         </div>
       </div>
 
-      {/* Guaranteed In-App Delete Confirmation Modal (no browser window.confirm) */}
       <ConfirmModal
         isOpen={!!taskToDelete}
         onClose={() => setTaskToDelete(null)}
@@ -337,3 +386,4 @@ export const TasksTab: React.FC<TasksTabProps> = ({
     </div>
   );
 };
+

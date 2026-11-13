@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LeaveRequest,
   UserProfile,
@@ -8,6 +8,7 @@ import {
   AttendanceOverrideStatus,
 } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import { isAdminOrSuper, canApproveLeave } from '../utils/roleHelpers';
 import { 
   CalendarDays, 
   Plus, 
@@ -25,6 +26,10 @@ interface LeaveTabProps {
   attendanceOverrides: AttendanceRecord[];
   currentUser: UserProfile;
   allUsers: UserProfile[];
+  filterRequest?: {
+    filter: 'all' | 'my' | 'pending' | 'approved' | 'rejected' | 'hr-unsynced';
+    key: number;
+  } | null;
   onOpenAddLeave: (targetMember?: UserProfile) => void;
   onOpenAddTask: (targetMember?: UserProfile) => void;
   onOpenAddTraining: (targetMember?: UserProfile) => void;
@@ -48,6 +53,7 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
   attendanceOverrides,
   currentUser,
   allUsers,
+  filterRequest,
   onOpenAddLeave,
   onOpenMemberSheet,
   onOpenEditLeave,
@@ -61,7 +67,14 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
   const [search, setSearch] = useState('');
   const [leaveToDelete, setLeaveToDelete] = useState<LeaveRequest | null>(null);
 
-  const isAdmin = currentUser.roleTier === 'ADMIN';
+  useEffect(() => {
+    if (filterRequest) {
+      setFilter(filterRequest.filter);
+    }
+  }, [filterRequest]);
+
+  const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const canApprove = canApproveLeave(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
 
   const filteredLeaves = leaves.filter((leave) => {
@@ -302,8 +315,8 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
 
                       <td className="py-3.5 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Admin Approve/Reject buttons for Pending leaves */}
-                          {isAdmin && leave.status === 'Pending' && (
+                          {/* Super Admin ONLY Approve/Reject buttons for Pending leaves */}
+                          {canApprove && leave.status === 'Pending' && (
                             <>
                               <button
                                 onClick={() => onApproveLeave(leave.id, 'Approved')}
@@ -320,6 +333,11 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
                                 Reject
                               </button>
                             </>
+                          )}
+                          {isAdmin && !canApprove && leave.status === 'Pending' && (
+                            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[10px] font-bold">
+                              {language === 'my' ? 'Super Admin အတည်ပြုရန်' : 'Super Admin Approval'}
+                            </span>
                           )}
 
                           {canEdit && (

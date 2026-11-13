@@ -100,7 +100,7 @@ export const WorkflowModal: React.FC<WorkflowModalProps> = ({
                   ⏳ Advance Leave Submission & Tracking
                 </div>
                 <div className="bg-purple-50 p-2 rounded-lg border border-purple-200 text-[10px] font-bold text-purple-800">
-                  👑 Admin Evaluation: Approve / Reject
+                  👑 Super Admin Evaluation: Approve / Reject
                 </div>
                 <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-200 text-[10px] font-bold text-emerald-800">
                   📅 Master Leave Calendar & Records
@@ -139,22 +139,31 @@ export const WorkflowModal: React.FC<WorkflowModalProps> = ({
               <Sparkles className="w-4 h-4 text-amber-500" />
               <span>{language === 'my' ? 'အသုံးပြုသူ ကိုယ်ပိုင်အခွင့်အရေးနှင့် စီမံခန့်ခွဲမှု စည်းမျဉ်းများ' : 'User Self-Service Permissions'}</span>
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
                 <span className="font-extrabold text-blue-800 block">👤 Team Member</span>
                 <p className="text-[11px] text-slate-600">
                   {language === 'my'
-                    ? 'မိမိနာမည်/ပရိုဖိုင် ပြင်ဆင်ခွင့်၊ မိမိ Task ထည့်/ပြင်/ဖျက်ခွင့်၊ ခွင့်တင်/ဖျက်ခွင့်၊ သင်တန်းနာရီ မှတ်တမ်းတင်ခွင့်၊ Comment ရေးသားခွင့် အပြည့်အဝရှိသည်။'
-                    : 'Edit own name & profile, create/edit/delete own tasks, leaves, training logs, and post discussion comments.'}
+                    ? 'မိမိ Member Sheet ထဲတွင် Task ဖြည့်/ပြင်/ဖျက်ခွင့်၊ ခွင့်တင်/ဖျက်ခွင့်၊ သင်တန်းနာရီ မှတ်တမ်းတင်ခွင့်ရှိသည်။ Completed ဖြစ်ရန် Admin/Super Admin အတည်ပြုချက် လိုအပ်သည်။'
+                    : 'Edit own profile, add/edit/delete tasks inside own Member Sheet, submit leaves & training logs. Task completion requires Admin/Super Admin approval.'}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 space-y-1">
+                <span className="font-extrabold text-indigo-900 block">🛡️ Admin</span>
+                <p className="text-[11px] text-indigo-900">
+                  {language === 'my'
+                    ? 'ဝန်ထမ်းစီမံခန့်ခွဲမှု၊ Project/Deadline သတ်မှတ်ခြင်း၊ Task ပြီးစီးမှု (Completed) အတည်ပြုခြင်းနှင့် မှတ်တမ်းအားလုံးကို ကြီးကြပ်ခွင့်ရှိသည်။ (Leave Approval မပါဝင်ပါ)'
+                    : 'Member onboarding, projects & deadlines, task completion approval, and HR leave note alignment (excludes Leave Approve/Reject).'}
                 </p>
               </div>
 
               <div className="p-3 rounded-xl bg-purple-50 border border-purple-200 space-y-1">
-                <span className="font-extrabold text-purple-900 block">👑 Admin</span>
+                <span className="font-extrabold text-purple-900 block">👑 Super Admin</span>
                 <p className="text-[11px] text-purple-900">
                   {language === 'my'
-                    ? 'အထက်ပါအခွင့်အရေးများအပြင် ခွင့်ရက် အတည်ပြုခြင်း/ငြင်းပယ်ခြင်း၊ အဖွဲ့ဝင်အားလုံး၏ ဒေတာများကို ကြီးကြပ်ခွင့်နှင့် အဖွဲ့ဝင်အသစ် ထည့်သွင်းခွင့်ရှိသည်။'
-                    : 'All Member capabilities + leave approval/rejection, full team overview, role tier promotion and member management.'}
+                    ? 'Admin အခွင့်အရေးအားလုံးအပြင် ခွင့်တောင်းခံမှုများကို Approve / Reject အတည်ပြုပေးနိုင်သည့် အမြင့်ဆုံး စီမံခန့်ခွဲသူ ဖြစ်သည်။'
+                    : 'Full system governance including all Admin capabilities plus final Leave Approval (Approve / Reject).'}
                 </p>
               </div>
 
