@@ -1,13 +1,25 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TrainingLog, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { X, Check, Clock, Calculator } from 'lucide-react';
+import {
+  WEEKDAY_CODES,
+  getMonthKey,
+  getDayOfWeekCode,
+  getWeekOfMonth,
+  getWeeksInMonth,
+  getWeekOrdinal,
+  getDefaultDateForMonthWeek,
+  getDateForWeekAndWeekday,
+  formatMonthLabel,
+} from '../utils/weekHelpers';
+import { X, Check, Clock, Calculator, UserCheck } from 'lucide-react';
 
 interface TrainingModalProps {
   isOpen: boolean;
   onClose: () => void;
   trainingToEdit: TrainingLog | null;
   targetMember?: UserProfile | null;
+  defaultDate?: string;
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onSaveTraining: (trainingData: Partial<TrainingLog>) => void;
@@ -19,6 +31,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
   onClose,
   trainingToEdit,
   targetMember,
+  defaultDate,
   currentUser,
   allUsers,
   onSaveTraining,
@@ -49,7 +62,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
       setNotes(trainingToEdit.notes || '');
     } else {
       setName('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(defaultDate || new Date().toISOString().split('T')[0]);
       setStart('09:00');
       setEnd('17:00');
       setBreakHrs(1.0);
@@ -58,7 +71,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
       setLocation('KBZ Life Training Room / Online');
       setNotes('');
     }
-  }, [trainingToEdit, targetMember, currentUser, isOpen]);
+  }, [trainingToEdit, targetMember, defaultDate, currentUser, isOpen]);
 
   // Real-time formula computation: (End - Start) - Break
   const calculatedHours = useMemo(() => {
@@ -73,6 +86,11 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
   }, [start, end, breakHrs]);
 
   if (!isOpen) return null;
+
+  const selectedMonthKey = getMonthKey(date);
+  const selectedWeek = getWeekOfMonth(date);
+  const selectedWeekday = getDayOfWeekCode(date);
+  const weeksInMonth = getWeeksInMonth(selectedMonthKey);
 
   const handleToggleAttendee = (uid: string) => {
     setAttendeeIds((prev) =>
@@ -105,7 +123,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
@@ -118,7 +136,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
                 {trainingToEdit ? (language === 'my' ? 'သင်တန်းမှတ်တမ်း ပြင်ဆင်ရန်' : 'Edit Training Session') : t.saveTraining}
               </h3>
               <p className="text-[11px] text-slate-300">
-                {language === 'my' ? 'ကိုယ့်နာမည်အောက်တွင် သင်တန်းနာရီ မှတ်တမ်းတင်ခြင်း' : 'Calculate & record training hours'}
+                {language === 'my' ? 'သင်တန်းခေါင်းစဉ်၊ သင်တန်းဆရာအမည်နှင့် နာရီ မှတ်တမ်းတင်ခြင်း' : 'Record topic, trainer name & training hours'}
               </p>
             </div>
           </div>
@@ -153,7 +171,7 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[70vh]">
-          {/* Course Name */}
+          {/* Course / Topic Name */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
               {t.sessionName} <span className="text-red-500">*</span>
@@ -171,8 +189,11 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
           {/* Date & Trainer */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t.trainingDate} <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t.trainingDate} <span className="text-red-500">*</span></span>
+                <span className="text-[10px] font-bold text-purple-700">
+                  {formatMonthLabel(selectedMonthKey, language)} · {getWeekOrdinal(selectedWeek)} · {selectedWeekday}
+                </span>
               </label>
               <input
                 type="date"
@@ -184,16 +205,82 @@ export const TrainingModal: React.FC<TrainingModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t.trainerName}
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t.trainerName} <span className="text-red-500">*</span></span>
+                <button
+                  type="button"
+                  onClick={() => setTrainerName(currentUser.name)}
+                  className="text-[10px] font-bold text-purple-700 hover:underline flex items-center gap-0.5"
+                >
+                  <UserCheck className="w-3 h-3" />
+                  <span>{language === 'my' ? 'မိမိအမည်ထည့်' : 'Use Me'}</span>
+                </button>
               </label>
               <input
                 type="text"
+                required
+                list="training-modal-trainer-list"
                 value={trainerName}
                 onChange={(e) => setTrainerName(e.target.value)}
-                placeholder="Trainer name..."
-                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder={language === 'my' ? 'သင်တန်းဆရာအမည် ရိုက်ထည့်ပါ...' : 'Enter or pick trainer name...'}
+                className="w-full text-xs px-3 py-2 border border-purple-300 bg-purple-50/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold text-slate-900"
               />
+              <datalist id="training-modal-trainer-list">
+                {allUsers
+                  .filter((u) => u.roleTier !== 'VIEWER')
+                  .map((u) => (
+                    <option key={u.id} value={u.name}>
+                      {u.roleLabel}
+                    </option>
+                  ))}
+              </datalist>
+            </div>
+          </div>
+
+          {/* Auto-Synced Week & Weekday Quick Selector */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2.5">
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'လအလိုက် အပတ်စဉ် (Date ရွေးလျှင် အလိုအလျောက်ရွေးပေးမည်)' : 'Week of Month (auto-syncs with date)'}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {weeksInMonth.map((wk) => (
+                  <button
+                    key={wk}
+                    type="button"
+                    onClick={() => setDate(getDefaultDateForMonthWeek(selectedMonthKey, wk, selectedWeekday))}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      selectedWeek === wk
+                        ? 'bg-purple-700 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-purple-300'
+                    }`}
+                  >
+                    {getWeekOrdinal(wk)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'နေ့ရက် (Mon – Sun တိုက်ရိုက်ရွေးရန်)' : 'Weekday (Mon – Sun quick select)'}
+              </span>
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAY_CODES.map((wd) => (
+                  <button
+                    key={wd}
+                    type="button"
+                    onClick={() => setDate(getDateForWeekAndWeekday(selectedMonthKey, selectedWeek, wd))}
+                    className={`py-1 rounded-lg text-[11px] font-bold transition ${
+                      selectedWeekday === wd
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-purple-300'
+                    }`}
+                  >
+                    {wd}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

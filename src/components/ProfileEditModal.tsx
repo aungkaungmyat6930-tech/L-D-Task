@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, RoleTier, MemberStatus } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { X, UserPen, Check, Camera, Sparkles, Shield, UserCheck } from 'lucide-react';
+import { processProfilePhotoFile } from '../utils/imageUpload';
+import { X, UserPen, Check, Camera, Sparkles, Shield, UserCheck, Upload, AlertCircle } from 'lucide-react';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const targetUser = userToEdit || currentUser;
   const isEditingSelf = currentUser.id === targetUser.id;
   const isAdmin = currentUser.roleTier === 'ADMIN';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(targetUser.name);
   const [roleLabel, setRoleLabel] = useState(targetUser.roleLabel);
@@ -34,6 +36,9 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const [status, setStatus] = useState<MemberStatus>(targetUser.status || 'Active');
   const [roleTier, setRoleTier] = useState<RoleTier>(targetUser.roleTier);
   const [notes, setNotes] = useState(targetUser.notes || '');
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (targetUser) {
@@ -46,10 +51,29 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
       setStatus(targetUser.status || 'Active');
       setRoleTier(targetUser.roleTier);
       setNotes(targetUser.notes || '');
+      setPhotoError(null);
+      setUploadedFileName(null);
     }
   }, [targetUser, isOpen]);
 
   if (!isOpen) return null;
+
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoUploading(true);
+    setPhotoError(null);
+    try {
+      const dataUrl = await processProfilePhotoFile(file, 320);
+      setAvatar(dataUrl);
+      setUploadedFileName(file.name);
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Failed to upload image.');
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +113,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
@@ -105,8 +129,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
               </h3>
               <p className="text-[11px] text-slate-300">
                 {language === 'my'
-                  ? 'အမည်၊ ရာထူး၊ ဌာန နှင့် အဝင်/အထွက် အခြေအနေများ ပြောင်းလဲခြင်း'
-                  : 'Update personal identity, designation & active/resigned status'}
+                  ? 'အမည်၊ ဓာတ်ပုံ၊ ရာထူး၊ ဌာန နှင့် အဝင်/အထွက် အခြေအနေများ ပြောင်းလဲခြင်း'
+                  : 'Update personal identity, photo, designation & active/resigned status'}
               </p>
             </div>
           </div>
@@ -130,37 +154,92 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[75vh]">
-          {/* Avatar Preview & Quick Select */}
-          <div className="flex items-center gap-4 pb-2 border-b border-slate-100">
-            <div className="relative group shrink-0">
+          {/* Avatar Preview, File Upload & URL */}
+          <div className="flex items-start gap-4 pb-3 border-b border-slate-100">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="relative group shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-amber-400"
+              title={language === 'my' ? 'ဓာတ်ပုံ Upload တင်ရန် နှိပ်ပါ' : 'Click to upload photo'}
+            >
               <img
                 src={avatar || targetUser.avatar}
                 alt="Avatar Preview"
                 referrerPolicy="no-referrer"
-                className="w-16 h-16 rounded-full border-2 border-amber-400 object-cover shadow-sm bg-slate-100"
+                className="w-18 h-18 rounded-full border-2 border-amber-400 object-cover shadow-md bg-slate-100"
               />
-              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute inset-0 bg-black/50 rounded-full flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera className="w-4 h-4 text-white" />
+                <span className="text-[9px] font-bold text-white mt-0.5">Upload</span>
               </div>
-            </div>
-            <div className="flex-grow space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                {t.avatarUrl}
-              </label>
-              <input
-                type="url"
-                value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
-              />
-              <div className="flex items-center gap-1 pt-1">
+            </button>
+
+            <div className="flex-grow space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={photoUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition shadow-xs"
+                >
+                  <Upload className="w-3.5 h-3.5 text-amber-800" />
+                  <span>
+                    {photoUploading
+                      ? language === 'my' ? 'တင်နေသည်...' : 'Processing...'
+                      : language === 'my' ? 'ဓာတ်ပုံ Upload တင်ရန်' : 'Upload Photo from Device'}
+                  </span>
+                </button>
+                {uploadedFileName && (
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                    ✓ {uploadedFileName}
+                  </span>
+                )}
+              </div>
+
+              {photoError && (
+                <div className="flex items-center gap-1.5 text-[11px] text-red-600 font-semibold">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{photoError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">
+                  {language === 'my' ? 'သို့မဟုတ် ဓာတ်ပုံ URL ထည့်ရန်' : 'Or paste image URL'}
+                </label>
+                <input
+                  type="text"
+                  value={avatar.startsWith('data:image/') ? '' : avatar}
+                  onChange={(e) => {
+                    setAvatar(e.target.value);
+                    setUploadedFileName(null);
+                  }}
+                  placeholder={
+                    avatar.startsWith('data:image/')
+                      ? (language === 'my' ? 'စက်ထဲမှ ဓာတ်ပုံ Upload တင်ထားပြီးဖြစ်သည်' : 'Uploaded photo ready (paste URL to replace)')
+                      : 'https://images.unsplash.com/...'
+                  }
+                  className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center gap-1">
                 <span className="text-[10px] text-slate-400 mr-1">Quick pick:</span>
                 {sampleAvatars.map((pic, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setAvatar(pic)}
+                    onClick={() => {
+                      setAvatar(pic);
+                      setUploadedFileName(null);
+                    }}
                     className="w-5 h-5 rounded-full overflow-hidden border border-slate-300 hover:scale-110 transition-transform"
                   >
                     <img src={pic} alt="preset" className="w-full h-full object-cover" />

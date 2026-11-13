@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { UserProfile, RoleTier, MemberStatus } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import { processProfilePhotoFile } from '../utils/imageUpload';
 import { 
   X, 
   UserPlus, 
@@ -13,32 +14,47 @@ import {
   CheckCircle2, 
   AlertCircle,
   Calendar,
-  ShieldCheck
+  ShieldCheck,
+  Lock,
+  Upload,
+  KeyRound
 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
 
 interface UserManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser: UserProfile;
   allUsers: UserProfile[];
   onAddUser: (user: Partial<UserProfile>) => void;
   onUpdateUserStatus: (userId: string, newStatus: MemberStatus) => void;
   onDeleteUser: (userId: string) => void;
   onOpenEditProfile: (user: UserProfile) => void;
+  onOpenChangeAdminPassword?: () => void;
   language: Language;
 }
 
 export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   isOpen,
   onClose,
+  currentUser,
   allUsers,
   onAddUser,
   onUpdateUserStatus,
   onDeleteUser,
   onOpenEditProfile,
+  onOpenChangeAdminPassword,
   language,
 }) => {
   const t = TRANSLATIONS[language];
   const [activeTab, setActiveTab] = useState<'onboard' | 'offboard'>('onboard');
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Form states for onboarding
   const [name, setName] = useState('');
@@ -51,12 +67,41 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [avatar, setAvatar] = useState(
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // States for offboarding/member list
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'resigned'>('all');
 
   if (!isOpen) return null;
+
+  if (currentUser.roleTier !== 'ADMIN') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">
+            {language === 'my' ? 'Admin များသာ အသုံးပြုခွင့်ရှိသည်' : 'Admin Access Required'}
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            {language === 'my'
+              ? 'ဝန်ထမ်းအသစ် ထည့်သွင်းခြင်း (အဝင်) နှင့် နုတ်ထွက်/ဖယ်ရှားခြင်း (အထွက်) များကို Admin များကသာ ဆောင်ရွက်ခွင့်ရှိပါသည်။'
+              : 'Only Admins are authorized to onboard, offboard, or remove team members.'}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition"
+          >
+            {language === 'my' ? 'ပိတ်ရန်' : 'Close'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,12 +180,24 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-md transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenChangeAdminPassword && (
+              <button
+                type="button"
+                onClick={onOpenChangeAdminPassword}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold text-purple-100 bg-purple-800/80 hover:bg-purple-700 border border-purple-400/40 rounded-lg transition"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+                <span>{language === 'my' ? 'Admin Password ပြောင်းရန်' : 'Change Password'}</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white p-1 rounded-md transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher */}
@@ -289,14 +346,52 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Avatar Image URL & Presets
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                {language === 'my' ? 'ဝန်ထမ်းဓာတ်ပုံ Upload တင်ရန် / URL' : 'Staff Photo Upload / URL'}
               </label>
+              <div className="flex items-center gap-3 mb-2">
+                <img
+                  src={avatar}
+                  alt="Preview"
+                  referrerPolicy="no-referrer"
+                  className="w-11 h-11 rounded-full object-cover border border-slate-300 shrink-0"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setPhotoError(null);
+                    try {
+                      const dataUrl = await processProfilePhotoFile(file, 320);
+                      setAvatar(dataUrl);
+                    } catch (err) {
+                      setPhotoError(err instanceof Error ? err.message : 'Upload failed');
+                    } finally {
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition"
+                >
+                  <Upload className="w-3.5 h-3.5 text-amber-800" />
+                  <span>{language === 'my' ? 'ဓာတ်ပုံ Upload တင်ရန်' : 'Upload Photo'}</span>
+                </button>
+              </div>
+              {photoError && (
+                <p className="text-[11px] text-red-600 font-semibold mb-1">{photoError}</p>
+              )}
               <input
-                type="url"
-                value={avatar}
+                type="text"
+                value={avatar.startsWith('data:image/') ? '' : avatar}
                 onChange={(e) => setAvatar(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
+                placeholder={avatar.startsWith('data:image/') ? 'Uploaded photo ready' : 'https://images.unsplash.com/...'}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <div className="flex items-center gap-1.5 pt-2">
@@ -460,17 +555,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               ) : (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    if (
-                                      confirm(
+                                  onClick={() =>
+                                    setPendingConfirm({
+                                      title: language === 'my' ? 'ဝန်ထမ်းအထွက် သတ်မှတ်ရန်' : 'Offboard Team Member',
+                                      message:
                                         language === 'my'
                                           ? `"${user.name}" အား ဝန်ထမ်းအထွက် (Resigned) အဖြစ် သတ်မှတ်ရန် သေချာပါသလား? ၎င်း၏ Task များနှင့် Training မှတ်တမ်းများကို သမိုင်းအဖြစ် ဆက်လက်သိမ်းဆည်းထားမည်ဖြစ်ပါသည်။`
-                                          : `Mark "${user.name}" as Resigned / Offboarded? Past records will remain in history.`
-                                      )
-                                    ) {
-                                      onUpdateUserStatus(user.id, 'Resigned');
-                                    }
-                                  }}
+                                          : `Mark "${user.name}" as Resigned / Offboarded? Past records will remain in history.`,
+                                      confirmLabel: language === 'my' ? 'နုတ်ထွက်မှတ်မည်' : 'Offboard',
+                                      isDestructive: false,
+                                      onConfirm: () => onUpdateUserStatus(user.id, 'Resigned'),
+                                    })
+                                  }
                                   className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold shadow-xs transition"
                                   title="Offboard staff member"
                                 >
@@ -491,17 +587,18 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               {/* Permanently Delete Member */}
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (
-                                    confirm(
+                                onClick={() =>
+                                  setPendingConfirm({
+                                    title: language === 'my' ? 'အဖွဲ့ဝင် ဖျက်ရန် အတည်ပြုပါ' : 'Remove Team Member',
+                                    message:
                                       language === 'my'
                                         ? `"${user.name}" အား အဖွဲ့ဝင်စာရင်းမှ အပြီးပိုင် ဖျက်ရန် သေချာပါသလား?`
-                                        : `Permanently delete member "${user.name}"?`
-                                    )
-                                  ) {
-                                    onDeleteUser(user.id);
-                                  }
-                                }}
+                                        : `Permanently delete member "${user.name}"?`,
+                                    confirmLabel: language === 'my' ? 'အပြီးပိုင် ဖျက်မည်' : 'Remove Member',
+                                    isDestructive: true,
+                                    onConfirm: () => onDeleteUser(user.id),
+                                  })
+                                }
                                 className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"
                                 title="Delete member permanently"
                               >
@@ -529,6 +626,20 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!pendingConfirm}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          pendingConfirm?.onConfirm();
+          setPendingConfirm(null);
+        }}
+        title={pendingConfirm?.title}
+        message={pendingConfirm?.message}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        isDestructive={pendingConfirm?.isDestructive ?? true}
+        language={language}
+      />
     </div>
   );
 };

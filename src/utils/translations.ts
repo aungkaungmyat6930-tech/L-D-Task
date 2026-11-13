@@ -16,7 +16,7 @@ export const TRANSLATIONS = {
     
     // Tabs
     tabDirectory: 'Team Directory & Sheets',
-    tabWeekly: 'Weekly Board',
+    tabWeekly: 'Weekly Board & Attendance',
     tabTasks: 'Task Management',
     tabLeave: 'Leave Requests',
     tabTraining: 'Training Hours',
@@ -118,7 +118,7 @@ export const TRANSLATIONS = {
 
     // Tabs
     tabDirectory: 'အဖွဲ့ဝင်များနှင့် ကိုယ်ပိုင်မှတ်တမ်းများ',
-    tabWeekly: 'အပတ်စဉ်လုပ်ငန်းခွင်',
+    tabWeekly: 'အပတ်စဉ် တက်ရောက်မှု/ခွင့်/Task',
     tabTasks: 'လုပ်ငန်းတာဝန်များ (Tasks)',
     tabLeave: 'ခွင့်ရက်မှတ်တမ်းများ (Leaves)',
     tabTraining: 'သင်တန်းနာရီများ (Training Hours)',

@@ -16,7 +16,9 @@ import {
   User,
   Eye,
   AlertTriangle,
-  Clock4
+  Clock4,
+  KeyRound,
+  Lock
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -26,6 +28,8 @@ interface HeaderProps {
   onOpenEditProfile: () => void;
   onOpenOrgChart: () => void;
   onResetData: () => void;
+  onOpenChangeAdminPassword: () => void;
+  onLockAdmin: () => void;
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
   language: Language;
@@ -41,6 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenEditProfile,
   onOpenOrgChart,
   onResetData,
+  onOpenChangeAdminPassword,
+  onLockAdmin,
   currentTab,
   onSelectTab,
   language,
@@ -106,12 +112,12 @@ export const Header: React.FC<HeaderProps> = ({
               onChange={(e) => onSwitchUser(e.target.value)}
               className="bg-slate-900 text-white text-xs font-semibold rounded px-2 py-1 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
             >
-              <optgroup label="👑 Admins (Full Management & Approvals)">
+              <optgroup label="🔐 Admins (Password Protected)">
                 {allUsers
                   .filter((u) => u.roleTier === 'ADMIN')
                   .map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name} ({u.roleLabel})
+                      🔐 {u.name} ({u.roleLabel})
                     </option>
                   ))}
               </optgroup>
@@ -170,6 +176,32 @@ export const Header: React.FC<HeaderProps> = ({
                 <UserPen className="w-3.5 h-3.5" />
                 <span>{t.editProfile}</span>
               </button>
+            )}
+
+            {/* Admin Password & Lock Controls */}
+            {currentUser.roleTier === 'ADMIN' && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={onOpenChangeAdminPassword}
+                  title={language === 'my' ? 'Admin Password ပြောင်းရန်' : 'Change Admin Password'}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-purple-100 bg-purple-700/80 hover:bg-purple-600 border border-purple-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+                  <span>
+                    {language === 'my' ? 'Password ပြောင်း' : 'Change Password'}
+                  </span>
+                </button>
+                <button
+                  onClick={onLockAdmin}
+                  title={language === 'my' ? 'Admin Lock ချရန်' : 'Lock Admin Session'}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition whitespace-nowrap"
+                >
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">
+                    {language === 'my' ? 'Lock' : 'Lock'}
+                  </span>
+                </button>
+              </div>
             )}
 
             {/* Reset Data Button */}

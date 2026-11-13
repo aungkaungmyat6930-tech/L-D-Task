@@ -1,13 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { LeaveRequest, UserProfile, LeaveType } from '../types';
+import { LeaveRequest, UserProfile, LeaveType, LeaveStatus } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { X, Check, CalendarDays } from 'lucide-react';
+import {
+  WEEKDAY_CODES,
+  WeekdayCode,
+  getMonthKey,
+  getDayOfWeekCode,
+  getWeekOfMonth,
+  getWeeksInMonth,
+  getWeekOrdinal,
+  getDefaultDateForMonthWeek,
+  getDateForWeekAndWeekday,
+  formatMonthLabel,
+} from '../utils/weekHelpers';
+import { X, Check, CalendarDays, ShieldCheck, FileCheck2 } from 'lucide-react';
 
 interface LeaveModalProps {
   isOpen: boolean;
   onClose: () => void;
   leaveToEdit: LeaveRequest | null;
   targetMember?: UserProfile | null;
+  defaultDate?: string;
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onSaveLeave: (leaveData: Partial<LeaveRequest>) => void;
@@ -19,12 +32,14 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
   onClose,
   leaveToEdit,
   targetMember,
+  defaultDate,
   currentUser,
   allUsers,
   onSaveLeave,
   language,
 }) => {
   const t = TRANSLATIONS[language];
+  const isAdmin = currentUser.roleTier === 'ADMIN';
 
   const [memberId, setMemberId] = useState(currentUser.id);
   const [type, setType] = useState<LeaveType>('Casual Leave');
@@ -32,6 +47,12 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
   const [end, setEnd] = useState(new Date().toISOString().split('T')[0]);
   const [duration, setDuration] = useState(1);
   const [reason, setReason] = useState('');
+
+  // Admin HR Alignment States
+  const [status, setStatus] = useState<LeaveStatus>('Pending');
+  const [hrRefId, setHrRefId] = useState('');
+  const [hrSynced, setHrSynced] = useState(false);
+  const [adminNote, setAdminNote] = useState('');
 
   useEffect(() => {
     if (leaveToEdit) {
@@ -41,17 +62,55 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
       setEnd(leaveToEdit.end);
       setDuration(leaveToEdit.duration);
       setReason(leaveToEdit.reason);
+      setStatus(leaveToEdit.status);
+      setHrRefId(leaveToEdit.hrRefId || '');
+      setHrSynced(Boolean(leaveToEdit.hrSynced));
+      setAdminNote(leaveToEdit.adminNote || '');
     } else {
+      const initDate = defaultDate || new Date().toISOString().split('T')[0];
       setMemberId(targetMember ? targetMember.id : currentUser.id);
       setType('Casual Leave');
-      setStart(new Date().toISOString().split('T')[0]);
-      setEnd(new Date().toISOString().split('T')[0]);
+      setStart(initDate);
+      setEnd(initDate);
       setDuration(1);
       setReason('');
+      setStatus('Pending');
+      setHrRefId('');
+      setHrSynced(false);
+      setAdminNote('');
     }
-  }, [leaveToEdit, targetMember, currentUser, isOpen]);
+  }, [leaveToEdit, targetMember, defaultDate, currentUser, isOpen]);
 
   if (!isOpen) return null;
+
+  const selectedMonthKey = getMonthKey(start);
+  const selectedWeek = getWeekOfMonth(start);
+  const selectedWeekday = getDayOfWeekCode(start);
+  const weeksInMonth = getWeeksInMonth(selectedMonthKey);
+
+  const handleStartEndChange = (nextStart: string, nextEnd: string) => {
+    setStart(nextStart);
+    const resolvedEnd = nextEnd < nextStart ? nextStart : nextEnd;
+    setEnd(resolvedEnd);
+    const sDate = new Date(nextStart);
+    const eDate = new Date(resolvedEnd);
+    if (!isNaN(sDate.getTime()) && !isNaN(eDate.getTime())) {
+      const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffDays >= 1) {
+        setDuration(diffDays);
+      }
+    }
+  };
+
+  const handleSelectWeek = (wk: 1 | 2 | 3 | 4 | 5) => {
+    const targetDt = getDefaultDateForMonthWeek(selectedMonthKey, wk, selectedWeekday);
+    handleStartEndChange(targetDt, targetDt);
+  };
+
+  const handleSelectWeekday = (wd: WeekdayCode) => {
+    const targetDt = getDateForWeekAndWeekday(selectedMonthKey, selectedWeek, wd);
+    handleStartEndChange(targetDt, targetDt);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +118,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
 
     const selectedMember = allUsers.find((u) => u.id === memberId) || currentUser;
 
-    onSaveLeave({
+    const payload: Partial<LeaveRequest> = {
       id: leaveToEdit?.id,
       memberId: selectedMember.id,
       memberName: selectedMember.name,
@@ -68,13 +127,21 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
       end,
       duration: Number(duration) || 1,
       reason: reason.trim(),
-    });
+    };
 
+    if (isAdmin) {
+      payload.status = status;
+      payload.hrRefId = hrRefId.trim() || undefined;
+      payload.hrSynced = hrSynced;
+      payload.adminNote = adminNote.trim() || undefined;
+    }
+
+    onSaveLeave(payload);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
@@ -84,10 +151,20 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">
-                {leaveToEdit ? (language === 'my' ? 'ခွင့်မှတ်တမ်း ပြင်ဆင်ရန်' : 'Edit Leave Record') : t.submitLeave}
+                {leaveToEdit
+                  ? isAdmin
+                    ? language === 'my'
+                      ? 'ခွင့်မှတ်တမ်း ပြင်ဆင်ရန် / HR နှင့်ကိုက်ညှိရန်'
+                      : 'Edit & Align Leave with HR'
+                    : language === 'my'
+                    ? 'ခွင့်မှတ်တမ်း ပြင်ဆင်ရန်'
+                    : 'Edit Leave Record'
+                  : t.submitLeave}
               </h3>
               <p className="text-[11px] text-slate-300">
-                {language === 'my' ? 'ကိုယ့်နာမည်အောက်တွင် ခွင့်ရက်တင်သွင်းခြင်း' : 'Submit or edit advance leave plan'}
+                {language === 'my'
+                  ? 'ကိုယ့်နာမည်အောက်တွင် ခွင့်ရက်တင်သွင်းခြင်းနှင့် HR ခွင့်စာရင်း ချိန်ညှိခြင်း'
+                  : 'Submit leave plan & align with HR leave records'}
               </p>
             </div>
           </div>
@@ -106,7 +183,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
             <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
               <span>{language === 'my' ? 'ခွင့်တောင်းခံသူ (Team Member)' : 'Team Member'}</span>
               {targetMember && (
-                <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.2 rounded">
+                <span className="text-[10px] text-teal-700 font-bold bg-teal-50 px-1.5 py-0.5 rounded">
                   Direct for: {targetMember.name}
                 </span>
               )}
@@ -142,11 +219,13 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                 onChange={(e) => setType(e.target.value as LeaveType)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-medium"
               >
-                <option value="Casual Leave">Casual Leave (လုပ်သက်ခွင့်/ရှောင်တခင်ခွင့်)</option>
-                <option value="Earned Leave">Earned Leave (နှစ်စဉ်ခံစားခွင့်)</option>
+                <option value="Casual Leave">Casual Leave (ရှောင်တခင်ခွင့်)</option>
+                <option value="Earned Leave">Earned Leave (လုပ်သက်ခွင့်)</option>
                 <option value="Medical Leave">Medical Leave (ဆေးခွင့်)</option>
                 <option value="Training/Exam Leave">Training/Exam Leave (စာမေးပွဲ/သင်တန်းခွင့်)</option>
-                <option value="Maternity/Paternity Leave">Maternity/Paternity Leave</option>
+                <option value="Maternity/Paternity Leave">Maternity/Paternity Leave (မီးဖွားခွင့်)</option>
+                <option value="Compassionate Leave">Compassionate Leave (သာရေး/နာရေးခွင့်)</option>
+                <option value="Unpaid Leave">Unpaid Leave (လစာမဲ့ခွင့်)</option>
               </select>
             </div>
 
@@ -160,7 +239,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                 min="0.5"
                 required
                 value={duration}
-                onChange={(e) => setDuration(parseFloat(e.target.value) || 1)}
+                onChange={(e) => setDuration(parseFloat(e.target.value) || 0.5)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 font-semibold"
               />
             </div>
@@ -169,14 +248,17 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
           {/* Date Range */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t.startDate} <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t.startDate} <span className="text-red-500">*</span></span>
+                <span className="text-[10px] font-bold text-teal-700">
+                  {formatMonthLabel(selectedMonthKey, language)} · {getWeekOrdinal(selectedWeek)} · {selectedWeekday}
+                </span>
               </label>
               <input
                 type="date"
                 required
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e) => handleStartEndChange(e.target.value, end)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -189,9 +271,56 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                 type="date"
                 required
                 value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                onChange={(e) => handleStartEndChange(start, e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
+            </div>
+          </div>
+
+          {/* Auto-Synced Week & Weekday Quick Selector */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2.5">
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'လအလိုက် အပတ်စဉ် (Date ရွေးလျှင် အလိုအလျောက်ရွေးပေးမည်)' : 'Week of Month (auto-syncs with date)'}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {weeksInMonth.map((wk) => (
+                  <button
+                    key={wk}
+                    type="button"
+                    onClick={() => handleSelectWeek(wk)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      selectedWeek === wk
+                        ? 'bg-teal-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-teal-300'
+                    }`}
+                  >
+                    {getWeekOrdinal(wk)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'နေ့ရက် (Mon – Sun တိုက်ရိုက်ရွေးရန်)' : 'Weekday (Mon – Sun quick select)'}
+              </span>
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAY_CODES.map((wd) => (
+                  <button
+                    key={wd}
+                    type="button"
+                    onClick={() => handleSelectWeekday(wd)}
+                    className={`py-1 rounded-lg text-[11px] font-bold transition ${
+                      selectedWeekday === wd
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-teal-300'
+                    }`}
+                  >
+                    {wd}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -201,7 +330,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
               {t.reason} <span className="text-red-500">*</span>
             </label>
             <textarea
-              rows={3}
+              rows={2}
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -209,6 +338,85 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
               className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
+
+          {/* Admin HR Leave Alignment Controls */}
+          {isAdmin && (
+            <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-purple-900">
+                  <ShieldCheck className="w-4 h-4 text-purple-700" />
+                  <span>
+                    {language === 'my'
+                      ? 'Admin: HR ခွင့်စာရင်းနှင့် ကိုက်ညှိပြင်ဆင်မှု'
+                      : 'Admin: HR Leave Alignment & Status Override'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold text-purple-700">ADMIN</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                    {language === 'my' ? 'ခွင့်ပြုချက် အခြေအနေ (Status)' : 'Approval Status'}
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as LeaveStatus)}
+                    className="w-full text-xs px-2.5 py-1.5 border border-purple-300 bg-white rounded-lg font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="Pending">Pending (စောင့်ဆိုင်းဆဲ)</option>
+                    <option value="Approved">Approved (အတည်ပြုပြီး)</option>
+                    <option value="Rejected">Rejected (ငြင်းပယ်ထား)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                    {language === 'my' ? 'HR ခွင့်စာရင်း Reference ID' : 'HR Leave Reference ID'}
+                  </label>
+                  <input
+                    type="text"
+                    value={hrRefId}
+                    onChange={(e) => setHrRefId(e.target.value)}
+                    placeholder="e.g. HR-LV-2026-042"
+                    className="w-full text-xs px-2.5 py-1.5 border border-purple-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs font-bold text-purple-900 cursor-pointer bg-white px-3 py-2 rounded-lg border border-purple-200">
+                <input
+                  type="checkbox"
+                  checked={hrSynced}
+                  onChange={(e) => setHrSynced(e.target.checked)}
+                  className="rounded text-purple-600 focus:ring-purple-500"
+                />
+                <FileCheck2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  {language === 'my'
+                    ? 'HR Leave စနစ်မှ ခွင့်ရက်/အမျိုးအစားနှင့် တိုက်ဆိုင်ကိုက်ညီပြီး (HR Matched)'
+                    : 'Verified & Matched with HR Leave System'}
+                </span>
+              </label>
+
+              <div>
+                <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                  {language === 'my' ? 'HR နှင့်ကိုက်ညှိသည့် Admin မှတ်ချက် (Admin / HR Note)' : 'Admin / HR Adjustment Note'}
+                </label>
+                <input
+                  type="text"
+                  value={adminNote}
+                  onChange={(e) => setAdminNote(e.target.value)}
+                  placeholder={
+                    language === 'my'
+                      ? 'ဥပမာ- HR မှတ်တမ်းအရ ၁.၅ ရက်သို့ ပြင်ဆင်ချိန်ညှိပြီး...'
+                      : 'e.g. Adjusted leave type/days to match HR portal record...'
+                  }
+                  className="w-full text-xs px-2.5 py-1.5 border border-purple-300 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Buttons */}
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">

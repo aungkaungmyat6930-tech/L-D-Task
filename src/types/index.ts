@@ -32,6 +32,9 @@ export interface TaskItem {
   title: string;
   ownerId: string;
   ownerName: string;
+  coAssigneeIds?: string[];
+  coAssigneeNames?: string[];
+  projectId?: string;
   due: string;
   followup: string;
   day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
@@ -41,7 +44,14 @@ export interface TaskItem {
   createdAt: string;
 }
 
-export type LeaveType = 'Casual Leave' | 'Earned Leave' | 'Medical Leave' | 'Training/Exam Leave' | 'Maternity/Paternity Leave';
+export type LeaveType =
+  | 'Casual Leave'
+  | 'Earned Leave'
+  | 'Medical Leave'
+  | 'Training/Exam Leave'
+  | 'Maternity/Paternity Leave'
+  | 'Unpaid Leave'
+  | 'Compassionate Leave';
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface LeaveRequest {
@@ -57,6 +67,8 @@ export interface LeaveRequest {
   approvedBy?: string;
   approvedAt?: string;
   adminNote?: string;
+  hrRefId?: string;
+  hrSynced?: boolean;
   createdAt: string;
 }
 
@@ -81,10 +93,24 @@ export interface StrategicProject {
   title: string;
   ownerName: string;
   ownerId: string;
+  coAssigneeIds?: string[];
+  coAssigneeNames?: string[];
   progress: number;
   deadline: string;
+  followupDate?: string;
+  followupNote?: string;
   deliverables: string;
   status: 'In Progress' | 'On Track' | 'Final Review' | 'Completed';
+}
+
+export type AttendanceOverrideStatus = 'Office' | 'WFH' | 'Training' | 'Holiday' | 'Absent';
+
+export interface AttendanceRecord {
+  id: string;
+  memberId: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceOverrideStatus;
+  note?: string;
 }
 
 export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects';

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TrainingLog, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { 
@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Sparkles
 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
 
 interface TrainingTabProps {
   trainingLogs: TrainingLog[];
@@ -44,14 +45,21 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
   const t = TRANSLATIONS[language];
   const [filter, setFilter] = useState<'all' | 'my'>('all');
   const [search, setSearch] = useState('');
+  const [logToDelete, setLogToDelete] = useState<TrainingLog | null>(null);
 
   // Quick Inline Calculator state
   const [qName, setQName] = useState('');
+  const [qTrainer, setQTrainer] = useState(currentUser.name);
   const [qDate, setQDate] = useState(new Date().toISOString().split('T')[0]);
   const [qStart, setQStart] = useState('09:00');
   const [qEnd, setQEnd] = useState('17:00');
   const [qBreak, setQBreak] = useState(1.0);
   const [qAttendees, setQAttendees] = useState<string[]>([currentUser.id]);
+
+  useEffect(() => {
+    setQTrainer(currentUser.name);
+    setQAttendees([currentUser.id]);
+  }, [currentUser.id, currentUser.name]);
 
   const isAdmin = currentUser.roleTier === 'ADMIN';
   const isViewer = currentUser.roleTier === 'VIEWER';
@@ -82,7 +90,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
       calculatedHours,
       attendeeIds: qAttendees,
       attendeeNames: attendees.map((u) => u.name),
-      trainerName: currentUser.name,
+      trainerName: qTrainer.trim() || currentUser.name,
     });
 
     setQName('');
@@ -163,6 +171,27 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                   placeholder="e.g. Life Insurance Product Training"
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-600 font-medium"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  {t.trainerName}
+                </label>
+                <input
+                  type="text"
+                  list="quick-trainer-list"
+                  value={qTrainer}
+                  onChange={(e) => setQTrainer(e.target.value)}
+                  placeholder={language === 'my' ? 'သင်တန်းဆရာအမည်...' : 'Trainer / Facilitator name...'}
+                  className="w-full text-xs px-3 py-1.5 border border-purple-300 bg-purple-50/30 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-600 font-medium"
+                />
+                <datalist id="quick-trainer-list">
+                  {allUsers
+                    .filter((u) => u.roleTier !== 'VIEWER')
+                    .map((u) => (
+                      <option key={u.id} value={u.name} />
+                    ))}
+                </datalist>
               </div>
 
               <div>
@@ -332,7 +361,8 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-700 font-bold border-y border-slate-200">
                 <tr>
-                  <th className="py-3 px-3">Session Name</th>
+                  <th className="py-3 px-3">Session / Topic</th>
+                  <th className="py-3 px-3">Trainer</th>
                   <th className="py-3 px-3">Date</th>
                   <th className="py-3 px-3">Timing</th>
                   <th className="py-3 px-3">Break</th>
@@ -344,7 +374,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
               <tbody className="divide-y divide-slate-100">
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-10 text-center text-slate-400 italic">
+                    <td colSpan={8} className="py-10 text-center text-slate-400 italic">
                       {language === 'my' ? 'ကိုက်ညီသော သင်တန်းမှတ်တမ်း မရှိပါ။' : 'No training sessions found.'}
                     </td>
                   </tr>
@@ -364,6 +394,9 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                       >
                         <td className="py-3 px-3 font-semibold text-slate-900 max-w-xs">
                           {log.name}
+                        </td>
+                        <td className="py-3 px-3 font-semibold text-purple-900">
+                          {log.trainerName || '-'}
                         </td>
                         <td className="py-3 px-3 tabular-nums text-slate-600">
                           {log.date}
@@ -412,11 +445,7 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm(language === 'my' ? 'ဤသင်တန်းမှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?' : 'Delete this training log?')) {
-                                    onDeleteTraining(log.id);
-                                  }
-                                }}
+                                onClick={() => setLogToDelete(log)}
                                 className="p-1 text-red-600 hover:bg-red-50 rounded"
                                 title={t.delete}
                               >
@@ -436,6 +465,26 @@ export const TrainingTab: React.FC<TrainingTabProps> = ({
           </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={!!logToDelete}
+        onClose={() => setLogToDelete(null)}
+        onConfirm={() => {
+          if (logToDelete) {
+            onDeleteTraining(logToDelete.id);
+            setLogToDelete(null);
+          }
+        }}
+        title={language === 'my' ? 'သင်တန်းမှတ်တမ်း ဖျက်ရန်' : 'Confirm Training Deletion'}
+        message={
+          language === 'my'
+            ? `"${logToDelete?.name}" မှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?`
+            : `Delete training log "${logToDelete?.name}"?`
+        }
+        confirmLabel={language === 'my' ? 'ဖျက်မည်' : 'Delete'}
+        cancelLabel={language === 'my' ? 'မဖျက်တော့ပါ' : 'Cancel'}
+        language={language}
+      />
     </div>
   );
 };

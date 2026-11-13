@@ -1,6 +1,31 @@
-import React, { useState } from 'react';
-import { UserProfile, TaskItem, LeaveRequest, TrainingLog, MemberStatus } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  UserProfile,
+  TaskItem,
+  LeaveRequest,
+  TrainingLog,
+  MemberStatus,
+  AttendanceRecord,
+  AttendanceOverrideStatus,
+} from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import {
+  WeekNumber,
+  getMonthKey,
+  getWeekOfMonth,
+  getWeeksInMonth,
+  getWeekLabel,
+  getWeekOrdinal,
+  getDefaultDateForMonthWeek,
+  shiftMonth,
+  formatMonthLabel,
+} from '../utils/weekHelpers';
+import {
+  computeMemberMonthlyAttendance,
+  ComputedDayStatus,
+  DailyAttendanceRow,
+} from '../utils/attendanceHelpers';
+import { exportMemberMonthlyExcel } from '../utils/excelExport';
 import { 
   X, 
   CheckSquare, 
@@ -11,13 +36,18 @@ import {
   Trash2, 
   MessageSquare, 
   ShieldCheck, 
-  Check, 
   AlertCircle,
   User,
   Sparkles,
   UserCheck,
   UserMinus,
-  UserPen
+  UserPen,
+  ChevronLeft,
+  ChevronRight,
+  GraduationCap,
+  FileCheck2,
+  Building2,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -29,15 +59,23 @@ interface MemberSheetModalProps {
   tasks: TaskItem[];
   leaves: LeaveRequest[];
   trainingLogs: TrainingLog[];
-  onOpenAddTask: (member: UserProfile) => void;
+  attendanceOverrides: AttendanceRecord[];
+  onSetAttendanceOverride: (
+    memberId: string,
+    date: string,
+    status: AttendanceOverrideStatus | null,
+    note?: string
+  ) => void;
+  onExportExcelSuccess?: (filename: string) => void;
+  onOpenAddTask: (member: UserProfile, defaultDate?: string) => void;
   onOpenEditTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenComments: (task: TaskItem) => void;
-  onOpenAddLeave: (member: UserProfile) => void;
+  onOpenAddLeave: (member: UserProfile, defaultDate?: string) => void;
   onOpenEditLeave: (leave: LeaveRequest) => void;
   onDeleteLeave: (leaveId: string) => void;
   onApproveLeave: (leaveId: string, status: 'Approved' | 'Rejected') => void;
-  onOpenAddTraining: (member: UserProfile) => void;
+  onOpenAddTraining: (member: UserProfile, defaultDate?: string) => void;
   onOpenEditTraining: (training: TrainingLog) => void;
   onDeleteTraining: (trainingId: string) => void;
   onOpenEditProfile: (member: UserProfile) => void;
@@ -53,6 +91,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   tasks,
   leaves,
   trainingLogs,
+  attendanceOverrides,
+  onSetAttendanceOverride,
+  onExportExcelSuccess,
   onOpenAddTask,
   onOpenEditTask,
   onDeleteTask,
@@ -69,7 +110,30 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const [activeSubtab, setActiveSubtab] = useState<'tasks' | 'leaves' | 'training'>('tasks');
+  const [activeSubtab, setActiveSubtab] = useState<'tasks' | 'leaves' | 'training' | 'attendance'>('tasks');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [selectedWeek, setSelectedWeek] = useState<WeekNumber | 'all'>('all');
+  const [viewAllMonths, setViewAllMonths] = useState(false);
+
+  // Interactive 3D Tilt state for Profile Identity Card
+  const tiltCardRef = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedMonth(new Date().toISOString().slice(0, 7));
+      setSelectedWeek('all');
+      setViewAllMonths(false);
+    }
+  }, [isOpen, member?.id]);
 
   if (!isOpen || !member) return null;
 
@@ -78,667 +142,1306 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   const isViewer = currentUser.roleTier === 'VIEWER';
   const isResigned = member.status === 'Resigned';
 
-  // Has management rights over this member's sheet
   const canEditMemberProfile = (isMe || isAdmin) && !isViewer;
   const hasSheetControl = (isMe || isAdmin) && !isViewer;
 
-  // Filter records for this member
+  // All records for this member (including Co-Assigned project tasks)
   const memberTasks = tasks.filter(
-    (t) => t.ownerId === member.id || t.ownerName === member.name
+    (item) =>
+      item.ownerId === member.id ||
+      item.ownerName === member.name ||
+      item.coAssigneeIds?.includes(member.id) ||
+      item.coAssigneeNames?.includes(member.name)
   );
   const memberLeaves = leaves.filter(
-    (l) => l.memberId === member.id || l.memberName === member.name
+    (item) => item.memberId === member.id || item.memberName === member.name
   );
   const memberTraining = trainingLogs.filter(
-    (tr) =>
-      tr.attendeeIds?.includes(member.id) ||
-      tr.attendeeNames?.includes(member.name)
+    (item) =>
+      item.attendeeIds?.includes(member.id) ||
+      item.attendeeNames?.includes(member.name) ||
+      item.trainerName === member.name
   );
 
   const totalTrainingHours = memberTraining.reduce(
     (acc, tr) => acc + (tr.calculatedHours || 0),
     0
   );
+  const totalLeaveDays = memberLeaves.reduce((acc, l) => acc + (l.duration || 0), 0);
+  const activeTaskCount = memberTasks.filter(
+    (item) => item.status === 'Active' || item.status === 'Waiting' || item.status === 'Overdue'
+  ).length;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
-        {/* Header with Member Info */}
-        <div className="bg-slate-900 text-white px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800">
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
-              <img
-                src={member.avatar}
-                alt={member.name}
-                referrerPolicy="no-referrer"
-                className="w-14 h-14 rounded-full border-2 border-amber-400 object-cover shadow-sm bg-slate-800"
-              />
-              <span
-                className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${
-                  isResigned ? 'bg-red-500' : 'bg-emerald-500'
-                }`}
-                title={isResigned ? 'Resigned' : 'Active'}
-              />
+  // Month filtering helpers
+  const monthTasks = viewAllMonths
+    ? memberTasks
+    : memberTasks.filter((item) => getMonthKey(item.due) === selectedMonth);
+  const monthLeaves = viewAllMonths
+    ? memberLeaves
+    : memberLeaves.filter((item) => getMonthKey(item.start) === selectedMonth);
+  const monthTraining = viewAllMonths
+    ? memberTraining
+    : memberTraining.filter((item) => getMonthKey(item.date) === selectedMonth);
+
+  const weeksInMonth = getWeeksInMonth(selectedMonth);
+
+  const monthlyAttendance = computeMemberMonthlyAttendance(
+    member,
+    selectedMonth,
+    leaves,
+    trainingLogs,
+    tasks,
+    attendanceOverrides
+  );
+
+  // Get date string for a record based on active tab
+  const getRecordCountForWeek = (wk: WeekNumber): number => {
+    if (activeSubtab === 'tasks') {
+      return monthTasks.filter((item) => getWeekOfMonth(item.due) === wk).length;
+    }
+    if (activeSubtab === 'leaves') {
+      return monthLeaves.filter((item) => getWeekOfMonth(item.start) === wk).length;
+    }
+    if (activeSubtab === 'attendance') {
+      return monthlyAttendance.dailyRows.filter(
+        (r) => r.week === wk && (r.status === 'Office' || r.status === 'WFH' || r.status === 'Training')
+      ).length;
+    }
+    return monthTraining.filter((item) => getWeekOfMonth(item.date) === wk).length;
+  };
+
+  const handleExportMemberExcel = () => {
+    const filename = exportMemberMonthlyExcel({
+      member,
+      monthKey: selectedMonth,
+      tasks,
+      leaves,
+      trainingLogs,
+      attendanceOverrides,
+      language,
+    });
+    onExportExcelSuccess?.(filename);
+  };
+
+  const handleCardMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = tiltCardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const ry = (px - 0.5) * 9;
+    const rx = (0.5 - py) * 8;
+    setTilt({ rx, ry, gx: px * 100, gy: py * 100, active: true });
+  };
+
+  const handleCardMouseLeave = () => {
+    setTilt({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+  };
+
+  const handleAddForWeek = (wk: WeekNumber | 'all') => {
+    const targetDate = viewAllMonths
+      ? new Date().toISOString().split('T')[0]
+      : getDefaultDateForMonthWeek(selectedMonth, wk);
+
+    if (activeSubtab === 'tasks') {
+      onOpenAddTask(member, targetDate);
+    } else if (activeSubtab === 'leaves') {
+      onOpenAddLeave(member, targetDate);
+    } else {
+      onOpenAddTraining(member, targetDate);
+    }
+  };
+
+  // Render Task card row
+  const renderTaskCard = (task: TaskItem) => {
+    const isOverdue = task.status === 'Overdue';
+    const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
+    const canEditTask = (isMyTask || hasSheetControl) && !isViewer;
+
+    return (
+      <div
+        key={task.id}
+        className="row-3d-card bg-white rounded-xl border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-900">{task.title}</span>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                task.status === 'Completed'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : task.status === 'Overdue'
+                  ? 'bg-red-100 text-red-800'
+                  : task.status === 'Waiting'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-blue-100 text-blue-800'
+              }`}
+            >
+              {task.status}
+            </span>
+            {isMyTask && (
+              <span className="text-[10px] font-bold text-blue-700">
+                · {language === 'my' ? 'သင့် Task' : 'Your Task'}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
+            <span className={isOverdue ? 'text-red-600 font-bold' : ''}>
+              Due: {task.due}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>Follow-up: {task.followup}</span>
+            <span aria-hidden="true">·</span>
+            <span className="font-semibold text-slate-600">
+              {getWeekOrdinal(getWeekOfMonth(task.due))}
+            </span>
+            {task.note && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="truncate max-w-xs text-slate-600">{task.note}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => onOpenComments(task)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg font-bold text-xs transition"
+            title={t.comments}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>{task.comments ? task.comments.length : 0}</span>
+          </button>
+
+          {canEditTask && (
+            <>
+              <button
+                onClick={() => onOpenEditTask(task)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'Task ပြင်ဆင်ရန်' : 'Edit task'}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'ပြင်ရန်' : 'Edit'}</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  setPendingConfirm({
+                    title: language === 'my' ? 'Task ကို ဖျက်ရန် အတည်ပြုပါ' : 'Confirm Task Deletion',
+                    message:
+                      language === 'my'
+                        ? `"${task.title}" ကို စနစ်ထဲမှ အပြီးပိုင် ဖျက်ရန် သေချာပါသလား?`
+                        : `Delete task "${task.title}"?`,
+                    confirmLabel: language === 'my' ? 'ဖျက်မည်' : 'Delete Task',
+                    isDestructive: true,
+                    onConfirm: () => onDeleteTask(task.id),
+                  })
+                }
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'Task ဖျက်ရန်' : 'Delete task'}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'ဖျက်ရန်' : 'Delete'}</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Leave card row
+  const renderLeaveCard = (leave: LeaveRequest) => {
+    const canEditLeave = (isMe || isAdmin) && !isViewer;
+
+    return (
+      <div
+        key={leave.id}
+        className="row-3d-card bg-white rounded-xl border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-900">{leave.type}</span>
+            <span className="text-xs font-extrabold text-teal-700 tabular-nums">
+              {leave.duration} {leave.duration === 1 ? 'Day' : 'Days'}
+            </span>
+            <span
+              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                leave.status === 'Approved'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : leave.status === 'Rejected'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {leave.status}
+            </span>
+            {leave.hrSynced && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded">
+                <FileCheck2 className="w-3 h-3 text-teal-600" />
+                <span>
+                  {language === 'my' ? 'HR ကိုက်ညီပြီး' : 'HR Matched'}
+                  {leave.hrRefId ? ` · ${leave.hrRefId}` : ''}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
+            <span>
+              {leave.start} ~ {leave.end}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="font-semibold text-slate-600">
+              {getWeekOrdinal(getWeekOfMonth(leave.start))}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="text-slate-600 truncate max-w-sm">{leave.reason}</span>
+          </div>
+          {(leave.adminNote || leave.approvedBy) && (
+            <div className="text-[10px] text-purple-700 font-medium">
+              {leave.approvedBy ? `Reviewed by ${leave.approvedBy}` : ''}
+              {leave.approvedBy && leave.adminNote ? ' · ' : ''}
+              {leave.adminNote ? `HR Note: ${leave.adminNote}` : ''}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          {isAdmin && leave.status === 'Pending' && (
+            <>
+              <button
+                onClick={() => onApproveLeave(leave.id, 'Approved')}
+                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] shadow-xs transition"
+                title={t.approve}
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => onApproveLeave(leave.id, 'Rejected')}
+                className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-[11px] shadow-xs transition"
+                title={t.reject}
+              >
+                Reject
+              </button>
+            </>
+          )}
+
+          {canEditLeave && (
+            <>
+              <button
+                onClick={() => onOpenEditLeave(leave)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg font-bold text-xs transition"
+                title={isAdmin ? (language === 'my' ? 'HR နှင့်ကိုက်ညှိပြင်ဆင်ရန်' : 'Edit & Align HR') : t.edit}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>
+                  {isAdmin
+                    ? language === 'my'
+                      ? 'HR ချိန်ညှိ'
+                      : 'HR Align'
+                    : language === 'my'
+                    ? 'ပြင်ရန်'
+                    : 'Edit'}
+                </span>
+              </button>
+              <button
+                onClick={() =>
+                  setPendingConfirm({
+                    title: language === 'my' ? 'ခွင့်မှတ်တမ်း ဖျက်ရန်' : 'Confirm Leave Deletion',
+                    message:
+                      language === 'my'
+                        ? 'ဤခွင့်မှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?'
+                        : 'Delete this leave entry?',
+                    confirmLabel: language === 'my' ? 'ဖျက်မည်' : 'Delete',
+                    isDestructive: true,
+                    onConfirm: () => onDeleteLeave(leave.id),
+                  })
+                }
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'ခွင့်ဖျက်ရန်' : 'Delete leave'}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'ဖျက်ရန်' : 'Delete'}</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render Training Topic card row
+  const renderTrainingCard = (tr: TrainingLog) => {
+    const canEditTraining = (isMe || isAdmin) && !isViewer;
+
+    return (
+      <div
+        key={tr.id}
+        className="row-3d-card bg-white rounded-xl border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+      >
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-900">{tr.name}</span>
+            <span className="text-xs font-extrabold text-purple-700 tabular-nums">
+              {tr.calculatedHours.toFixed(1)} hrs
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
+            <span className="font-semibold text-purple-800 inline-flex items-center gap-1">
+              <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
+              Trainer: {tr.trainerName || '-'}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{tr.date}</span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {tr.start} ~ {tr.end} (Break {tr.breakHrs}h)
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="font-semibold text-slate-600">
+              {getWeekOrdinal(getWeekOfMonth(tr.date))}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {canEditTraining && (
+            <>
+              <button
+                onClick={() => onOpenEditTraining(tr)}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'သင်တန်းပြင်ရန်' : 'Edit training'}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'ပြင်ရန်' : 'Edit'}</span>
+              </button>
+              <button
+                onClick={() =>
+                  setPendingConfirm({
+                    title: language === 'my' ? 'သင်တန်းမှတ်တမ်း ဖျက်ရန်' : 'Confirm Training Deletion',
+                    message:
+                      language === 'my'
+                        ? 'ဤသင်တန်းမှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?'
+                        : 'Delete this training session?',
+                    confirmLabel: language === 'my' ? 'ဖျက်မည်' : 'Delete',
+                    isDestructive: true,
+                    onConfirm: () => onDeleteTraining(tr.id),
+                  })
+                }
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg font-bold text-xs transition"
+                title={language === 'my' ? 'သင်တန်းဖျက်ရန်' : 'Delete training'}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'ဖျက်ရန်' : 'Delete'}</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const getAttendanceBadge = (status: ComputedDayStatus) => {
+    switch (status) {
+      case 'Office':
+        return {
+          label: language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present',
+          cls: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+        };
+      case 'WFH':
+        return {
+          label: language === 'my' ? 'WFH (အိမ်မှ)' : 'WFH',
+          cls: 'bg-sky-100 text-sky-800 border border-sky-200',
+        };
+      case 'Training':
+        return {
+          label: language === 'my' ? 'သင်တန်း (Training)' : 'Training',
+          cls: 'bg-purple-100 text-purple-800 border border-purple-200',
+        };
+      case 'LeaveApproved':
+        return {
+          label: language === 'my' ? 'ခွင့် (အတည်ပြု)' : 'On Leave',
+          cls: 'bg-teal-100 text-teal-800 border border-teal-200',
+        };
+      case 'LeavePending':
+        return {
+          label: language === 'my' ? 'ခွင့် (စောင့်ဆိုင်း)' : 'Leave Pending',
+          cls: 'bg-amber-100 text-amber-800 border border-amber-200',
+        };
+      case 'Holiday':
+        return {
+          label: language === 'my' ? 'ရုံးပိတ်ရက်' : 'Holiday',
+          cls: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
+        };
+      case 'Absent':
+        return {
+          label: language === 'my' ? 'ပျက်ကွက်' : 'Absent',
+          cls: 'bg-red-100 text-red-800 border border-red-200',
+        };
+      case 'Weekend':
+        return {
+          label: language === 'my' ? 'စနေ/တနင်္ဂနွေ' : 'Weekend',
+          cls: 'bg-slate-100 text-slate-500 border border-slate-200',
+        };
+    }
+  };
+
+  const renderAttendanceRow = (row: DailyAttendanceRow) => {
+    const badge = getAttendanceBadge(row.status);
+    const selectVal = row.overrideStatus || 'AUTO';
+
+    return (
+      <div
+        key={row.date}
+        className={`rounded-xl border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
+          row.isWeekend && !row.overrideStatus && row.status === 'Weekend'
+            ? 'bg-slate-50/80 border-slate-200/70 text-slate-500'
+            : row.status === 'LeaveApproved'
+            ? 'bg-teal-50/40 border-teal-200/80'
+            : row.status === 'Absent'
+            ? 'bg-red-50/40 border-red-200/80'
+            : 'bg-white border-slate-200/90'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
+          <span className="font-mono font-bold text-slate-900 tabular-nums">{row.date}</span>
+          <span className="w-9 text-center py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[11px]">
+            {row.weekday}
+          </span>
+          <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${badge.cls}`}>
+            {badge.label}
+          </span>
+          {row.overrideStatus && (
+            <span className="text-[10px] font-bold text-indigo-700">
+              · {language === 'my' ? 'Manual ပြင်ထား' : 'Override'}
+            </span>
+          )}
+          {row.leave && (
+            <span className="text-[11px] text-teal-800 font-semibold truncate max-w-xs">
+              · {row.leave.type}
+              {row.leave.hrRefId ? ` (${row.leave.hrRefId})` : ''}
+            </span>
+          )}
+          {row.trainingSessions.length > 0 && (
+            <span className="text-[11px] text-purple-800 font-semibold truncate max-w-xs">
+              · {row.trainingSessions.map((tr) => tr.name).join(', ')}
+            </span>
+          )}
+          {row.tasksDueCount > 0 && (
+            <span className="text-[11px] text-blue-700 font-semibold tabular-nums">
+              · {row.tasksDueCount} {row.tasksDueCount === 1 ? 'task due' : 'tasks due'}
+            </span>
+          )}
+        </div>
+
+        {hasSheetControl && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <select
+              value={selectVal}
+              onChange={(e) => {
+                const val = e.target.value;
+                onSetAttendanceOverride(
+                  member.id,
+                  row.date,
+                  val === 'AUTO' ? null : (val as AttendanceOverrideStatus)
+                );
+              }}
+              className="text-[11px] font-semibold bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              title={language === 'my' ? 'တက်ရောက်မှု အခြေအနေ ပြောင်းရန်' : 'Set daily attendance status'}
+            >
+              <option value="AUTO">{language === 'my' ? 'Auto (စနစ်အတိုင်း)' : 'Auto'}</option>
+              <option value="Office">{language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}</option>
+              <option value="WFH">WFH</option>
+              <option value="Training">{language === 'my' ? 'သင်တန်း' : 'Training'}</option>
+              <option value="Holiday">{language === 'my' ? 'ရုံးပိတ်ရက်' : 'Holiday'}</option>
+              <option value="Absent">{language === 'my' ? 'ပျက်ကွက်' : 'Absent'}</option>
+            </select>
+
+            {!row.leave && (
+              <button
+                type="button"
+                onClick={() => onOpenAddLeave(member, row.date)}
+                className="px-2 py-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition"
+                title={language === 'my' ? 'ဤရက်အတွက် ခွင့်တင်ရန်' : 'Add leave for this date'}
+              >
+                + Leave
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render weekly grouped view or single week view for active tab
+  const renderActiveRecords = () => {
+    if (activeSubtab === 'attendance') {
+      const weeksToRender: WeekNumber[] =
+        selectedWeek === 'all' ? weeksInMonth : [selectedWeek];
+
+      return (
+        <div className="space-y-4">
+          {/* Combined Monthly Attendance & Leave Summary Strip */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-extrabold text-slate-900">
+                  {language === 'my'
+                    ? `${formatMonthLabel(selectedMonth, language)} — ရုံးတက်ရက် နှင့် ခွင့်ရက် ပေါင်းချုပ်`
+                    : `${formatMonthLabel(selectedMonth, language)} — Office Attendance & Leave Summary`}
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  {language === 'my'
+                    ? 'ခွင့်မှတ်တမ်းများ၊ သင်တန်းရက်များနှင့် ရုံးတက်ရက်များကို အလိုအလျောက် တွက်ချက်ပေါင်းစည်းထားပါသည်။'
+                    : 'Automatically calculated from approved leaves, training sessions, and manual overrides.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportMemberExcel}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>{language === 'my' ? 'Excel ထုတ်မည် (.xlsx)' : 'Export Excel (.xlsx)'}</span>
+              </button>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-bold text-white flex items-center gap-1.5">
-                  {member.name}
-                </h3>
-                {isMe && (
-                  <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md">
-                    {language === 'my' ? 'သင့်အကောင့် (You)' : 'You'}
-                  </span>
-                )}
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                    member.roleTier === 'ADMIN'
-                      ? 'bg-purple-900/80 text-purple-200 border border-purple-500/40'
-                      : member.roleTier === 'VIEWER'
-                      ? 'bg-slate-800 text-slate-300'
-                      : 'bg-blue-900/80 text-blue-200 border border-blue-500/40'
-                  }`}
-                >
-                  {member.roleTier}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-slate-500 block">
+                  {language === 'my' ? 'အလုပ်တက်ရက်စုစုပေါင်း' : 'Working Days'}
                 </span>
-
-                {isResigned ? (
-                  <span className="text-[10px] font-bold bg-red-900/80 text-red-200 border border-red-500/50 px-2 py-0.5 rounded flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 text-red-400" />
-                    <span>{language === 'my' ? 'နုတ်ထွက်ပြီး (အထွက်)' : 'Resigned'}</span>
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold bg-emerald-900/80 text-emerald-200 border border-emerald-500/50 px-2 py-0.5 rounded flex items-center gap-1">
-                    <UserCheck className="w-3 h-3 text-emerald-400" />
-                    <span>{language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (အဝင်)' : 'Active'}</span>
-                  </span>
-                )}
+                <span className="text-lg font-black text-slate-900 tabular-nums">
+                  {monthlyAttendance.workingDaysInMonth}
+                </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                {member.roleLabel} • <span className="text-slate-400">{member.dept}</span>
-                {member.email && <span className="text-slate-400 ml-2">✉ {member.email}</span>}
-              </p>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-emerald-700 block">
+                  {language === 'my' ? 'ရုံးတက်ရက် (Present)' : 'Office Present'}
+                </span>
+                <span className="text-lg font-black text-emerald-900 tabular-nums">
+                  {monthlyAttendance.officePresentDays}
+                </span>
+              </div>
+              <div className="bg-teal-50 border border-teal-200 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-teal-700 block">
+                  {language === 'my' ? 'အတည်ပြု ခွင့်ရက်' : 'Approved Leave'}
+                </span>
+                <span className="text-lg font-black text-teal-900 tabular-nums">
+                  {monthlyAttendance.approvedLeaveDaysInMonth}
+                </span>
+              </div>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-amber-700 block">
+                  {language === 'my' ? 'စောင့်ဆိုင်း ခွင့်ရက်' : 'Pending Leave'}
+                </span>
+                <span className="text-lg font-black text-amber-900 tabular-nums">
+                  {monthlyAttendance.pendingLeaveDaysInMonth}
+                </span>
+              </div>
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-2.5 col-span-2 sm:col-span-1">
+                <span className="text-[10px] font-bold text-purple-700 block">
+                  {language === 'my' ? 'သင်တန်းရက် / နာရီ' : 'Training Days / Hrs'}
+                </span>
+                <span className="text-lg font-black text-purple-900 tabular-nums">
+                  {monthlyAttendance.trainingDays}d · {monthlyAttendance.trainingHoursInMonth.toFixed(1)}h
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Quick 1-Click Action Adders */}
-            {!isViewer && (
-              <div className="flex items-center gap-1 mr-1 bg-slate-800/80 p-1 rounded-lg border border-slate-700">
-                <button
-                  onClick={() => onOpenAddTask(member)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-md shadow-sm transition"
-                  title={`Add Task directly for ${member.name}`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Task</span>
-                </button>
-                <button
-                  onClick={() => onOpenAddLeave(member)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-teal-600 hover:bg-teal-500 rounded-md shadow-sm transition"
-                  title={`Submit Leave directly for ${member.name}`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Leave</span>
-                </button>
-                <button
-                  onClick={() => onOpenAddTraining(member)}
-                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-purple-600 hover:bg-purple-500 rounded-md shadow-sm transition"
-                  title={`Log Training directly for ${member.name}`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>+ Training</span>
-                </button>
-              </div>
-            )}
+          {weeksToRender.map((wk) => {
+            const wkRows = monthlyAttendance.dailyRows.filter((r) => r.week === wk);
+            const wkPresent = wkRows.filter(
+              (r) => r.status === 'Office' || r.status === 'WFH' || r.status === 'Training'
+            ).length;
+            const wkLeave = wkRows.filter(
+              (r) => r.status === 'LeaveApproved' || r.status === 'LeavePending'
+            ).length;
 
-            {/* Direct Profile Edit Button (Core Requirement) */}
-            {canEditMemberProfile && (
-              <button
-                onClick={() => onOpenEditProfile(member)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition"
-                title={`Edit Profile of ${member.name}`}
+            return (
+              <div
+                key={wk}
+                className="rounded-2xl bg-gradient-to-b from-white to-slate-50/90 border border-slate-200/90 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
               >
-                <UserPen className="w-3.5 h-3.5" />
-                <span>{language === 'my' ? 'Profile ပြင်ဆင်ရန်' : 'Edit Profile'}</span>
+                <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-900 text-white text-[11px] font-black shadow-xs">
+                      W{wk}
+                    </span>
+                    <span className="text-xs font-extrabold text-slate-900">
+                      {getWeekLabel(selectedMonth, wk, language)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-bold tabular-nums">
+                    <span className="text-emerald-700">
+                      {language === 'my' ? `ရုံးတက် ${wkPresent} ရက်` : `Office: ${wkPresent}d`}
+                    </span>
+                    <span className="text-teal-700">
+                      {language === 'my' ? `ခွင့် ${wkLeave} ရက်` : `Leave: ${wkLeave}d`}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-3 space-y-1.5">
+                  {wkRows.map(renderAttendanceRow)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    const activeItems =
+      activeSubtab === 'tasks' ? monthTasks : activeSubtab === 'leaves' ? monthLeaves : monthTraining;
+
+    const addButtonLabel =
+      activeSubtab === 'tasks'
+        ? '+ Task'
+        : activeSubtab === 'leaves'
+        ? '+ Leave'
+        : '+ Topic';
+
+    const addButtonAccent =
+      activeSubtab === 'tasks'
+        ? 'bg-blue-600 hover:bg-blue-700'
+        : activeSubtab === 'leaves'
+        ? 'bg-teal-600 hover:bg-teal-700'
+        : 'bg-purple-700 hover:bg-purple-800';
+
+    if (viewAllMonths) {
+      if (activeItems.length === 0) {
+        return (
+          <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-2">
+            <p className="text-xs text-slate-500">
+              {language === 'my' ? 'မှတ်တမ်း မရှိသေးပါ။' : 'No records found across all months.'}
+            </p>
+            {!isViewer && (
+              <button
+                onClick={() => handleAddForWeek('all')}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white rounded-lg ${addButtonAccent}`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{addButtonLabel}</span>
               </button>
             )}
+          </div>
+        );
+      }
 
-            {/* Admin Offboard / Reactivate Toggle */}
-            {isAdmin && onUpdateMemberStatus && (
-              <button
-                onClick={() => {
-                  if (isResigned) {
-                    onUpdateMemberStatus(member.id, 'Active');
-                  } else {
-                    if (
-                      confirm(
-                        language === 'my'
-                          ? `"${member.name}" အား ဝန်ထမ်းအထွက် (Resigned) အဖြစ် သတ်မှတ်ရန် သေချာပါသလား?`
-                          : `Mark "${member.name}" as Resigned / Offboarded?`
-                      )
-                    ) {
-                      onUpdateMemberStatus(member.id, 'Resigned');
-                    }
-                  }
-                }}
-                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold rounded-lg border transition ${
-                  isResigned
-                    ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500 hover:bg-emerald-600/40'
-                    : 'bg-red-600/20 text-red-300 border-red-500 hover:bg-red-600/40'
-                }`}
-                title={isResigned ? 'Reactivate member' : 'Offboard member'}
-              >
-                {isResigned ? (
-                  <>
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span>{language === 'my' ? 'ပြန်လည်ခန့်ရန်' : 'Reactivate'}</span>
-                  </>
+      return (
+        <div className="space-y-2.5">
+          {activeSubtab === 'tasks' && monthTasks.map(renderTaskCard)}
+          {activeSubtab === 'leaves' && monthLeaves.map(renderLeaveCard)}
+          {activeSubtab === 'training' && monthTraining.map(renderTrainingCard)}
+        </div>
+      );
+    }
+
+    const weeksToRender: WeekNumber[] =
+      selectedWeek === 'all' ? weeksInMonth : [selectedWeek];
+
+    return (
+      <div className="space-y-4">
+        {weeksToRender.map((wk) => {
+          const wkTasks = monthTasks.filter((item) => getWeekOfMonth(item.due) === wk);
+          const wkLeaves = monthLeaves.filter((item) => getWeekOfMonth(item.start) === wk);
+          const wkTraining = monthTraining.filter((item) => getWeekOfMonth(item.date) === wk);
+          const count =
+            activeSubtab === 'tasks'
+              ? wkTasks.length
+              : activeSubtab === 'leaves'
+              ? wkLeaves.length
+              : wkTraining.length;
+
+          return (
+            <div
+              key={wk}
+              className="rounded-2xl bg-gradient-to-b from-white to-slate-50/90 border border-slate-200/90 shadow-[0_6px_16px_-6px_rgba(15,23,42,0.1)] overflow-hidden"
+            >
+              {/* Week Header Bar */}
+              <div className="px-4 py-2.5 bg-slate-100/80 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-lg bg-slate-900 text-white text-[11px] font-black shadow-xs">
+                    W{wk}
+                  </span>
+                  <span className="text-xs font-extrabold text-slate-900">
+                    {getWeekLabel(selectedMonth, wk, language)}
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                    · {count} {count === 1 ? 'item' : 'items'}
+                  </span>
+                </div>
+
+                {!isViewer && (
+                  <button
+                    type="button"
+                    onClick={() => handleAddForWeek(wk)}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white rounded-lg shadow-xs transition ${addButtonAccent}`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>
+                      {addButtonLabel} ({getWeekOrdinal(wk)})
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Week Records */}
+              <div className="p-3 space-y-2.5">
+                {count === 0 ? (
+                  <div className="py-3 px-4 text-center text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>
+                      {language === 'my'
+                        ? `${getWeekOrdinal(wk)} အတွင်း မှတ်တမ်းမရှိသေးပါ`
+                        : `No records scheduled in ${getWeekOrdinal(wk)}`}
+                    </span>
+                    {!isViewer && (
+                      <button
+                        type="button"
+                        onClick={() => handleAddForWeek(wk)}
+                        className="text-xs font-bold text-blue-600 hover:underline"
+                      >
+                        {language === 'my' ? `+ ${getWeekOrdinal(wk)} တွင် ထည့်ရန်` : `+ Add in ${getWeekOrdinal(wk)}`}
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <>
-                    <UserMinus className="w-3.5 h-3.5" />
-                    <span>{language === 'my' ? 'နုတ်ထွက်မှတ်ရန်' : 'Offboard'}</span>
+                    {activeSubtab === 'tasks' && wkTasks.map(renderTaskCard)}
+                    {activeSubtab === 'leaves' && wkLeaves.map(renderLeaveCard)}
+                    {activeSubtab === 'training' && wkTraining.map(renderTrainingCard)}
                   </>
                 )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 perspective-stage flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md">
+      <div className="sheet-3d-shell bg-slate-100 rounded-3xl w-full max-w-5xl max-h-[93vh] flex flex-col overflow-hidden border border-white/25">
+        {/* 3D Depth Stage Header */}
+        <div className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white px-5 sm:px-7 py-5 border-b border-slate-700/80 overflow-hidden">
+          {/* Subtle 3D Architectural Grid & Light Glow */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-20"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 20% 20%, rgba(251, 191, 36, 0.35), transparent 45%), radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.28), transparent 45%)',
+            }}
+          />
+
+          <div className="relative flex flex-wrap items-center justify-between gap-4">
+            {/* Interactive 3D Tilting Identity Card */}
+            <div
+              ref={tiltCardRef}
+              onMouseMove={handleCardMouseMove}
+              onMouseLeave={handleCardMouseLeave}
+              style={{
+                transform: `perspective(900px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+              }}
+              className="card-3d-tilt relative flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 shadow-[0_18px_36px_-12px_rgba(0,0,0,0.65)] max-w-xl"
+            >
+              {/* Dynamic 3D Specular Sheen */}
+              <div
+                className="pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-200"
+                style={{
+                  opacity: tilt.active ? 0.35 : 0.12,
+                  background: `radial-gradient(circle at ${tilt.gx}% ${tilt.gy}%, rgba(255,255,255,0.45), transparent 60%)`,
+                }}
+              />
+
+              {/* 3D Avatar Medallion */}
+              <div className="relative shrink-0" style={{ transform: 'translateZ(20px)' }}>
+                <div className="w-16 h-16 rounded-2xl p-0.5 bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500 shadow-[0_10px_20px_-6px_rgba(245,158,11,0.6)]">
+                  <img
+                    src={member.avatar}
+                    alt={member.name}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full rounded-[14px] object-cover bg-slate-800"
+                  />
+                </div>
+                <span
+                  className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-950 shadow ${
+                    isResigned ? 'bg-red-500' : 'bg-emerald-500'
+                  }`}
+                  title={isResigned ? 'Resigned' : 'Active'}
+                />
+              </div>
+
+              {/* Member Identity Text */}
+              <div className="relative min-w-0" style={{ transform: 'translateZ(14px)' }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-lg font-extrabold text-white tracking-tight">
+                    {member.name}
+                  </h3>
+                  <span className="text-[11px] font-bold text-amber-300">
+                    {member.roleTier}
+                    {isMe ? ` · ${language === 'my' ? 'သင့်အကောင့်' : 'You'}` : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-200 mt-0.5">
+                  {member.roleLabel} · <span className="text-slate-300">{member.dept}</span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 mt-1">
+                  <span className={isResigned ? 'text-red-300 font-semibold' : 'text-emerald-300 font-semibold'}>
+                    {isResigned
+                      ? language === 'my' ? 'နုတ်ထွက်ပြီး (Resigned)' : 'Resigned'
+                      : language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (Active)' : 'Active'}
+                  </span>
+                  {member.email && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="truncate">{member.email}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Action Cluster */}
+            <div className="relative flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportMemberExcel}
+                className="cube-3d-tile flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 rounded-xl border border-emerald-300/40"
+                title={language === 'my' ? 'Excel (.xlsx) ဖြင့် ထုတ်ယူရန်' : 'Export Monthly Attendance & Leave Excel'}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'Excel ထုတ်ရန်' : 'Export Excel'}</span>
               </button>
-            )}
+
+              {canEditMemberProfile && (
+                <button
+                  onClick={() => onOpenEditProfile(member)}
+                  className="cube-3d-tile flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-950 bg-gradient-to-b from-amber-300 to-amber-400 hover:from-amber-200 hover:to-amber-300 rounded-xl"
+                  title={`Edit Profile of ${member.name}`}
+                >
+                  <UserPen className="w-3.5 h-3.5" />
+                  <span>{language === 'my' ? 'Profile & ဓာတ်ပုံ ပြင်ရန်' : 'Edit Profile & Photo'}</span>
+                </button>
+              )}
+
+              {isAdmin && onUpdateMemberStatus && (
+                <button
+                  onClick={() => {
+                    if (isResigned) {
+                      onUpdateMemberStatus(member.id, 'Active');
+                    } else {
+                      setPendingConfirm({
+                        title: language === 'my' ? 'ဝန်ထမ်းအထွက် သတ်မှတ်ရန်' : 'Offboard Team Member',
+                        message:
+                          language === 'my'
+                            ? `"${member.name}" အား ဝန်ထမ်းအထွက် (Resigned) အဖြစ် သတ်မှတ်ရန် သေချာပါသလား?`
+                            : `Mark "${member.name}" as Resigned / Offboarded?`,
+                        confirmLabel: language === 'my' ? 'နုတ်ထွက်မှတ်မည်' : 'Offboard',
+                        isDestructive: false,
+                        onConfirm: () => onUpdateMemberStatus(member.id, 'Resigned'),
+                      });
+                    }
+                  }}
+                  className={`cube-3d-tile flex items-center gap-1 px-3 py-2 text-xs font-bold rounded-xl border ${
+                    isResigned
+                      ? 'bg-emerald-600/30 text-emerald-200 border-emerald-400/50 hover:bg-emerald-600/50'
+                      : 'bg-red-600/25 text-red-200 border-red-400/50 hover:bg-red-600/45'
+                  }`}
+                >
+                  {isResigned ? (
+                    <>
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>{language === 'my' ? 'ပြန်ခန့်ရန်' : 'Reactivate'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserMinus className="w-3.5 h-3.5" />
+                      <span>{language === 'my' ? 'နုတ်ထွက်မှတ်ရန်' : 'Offboard'}</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              <button
+                onClick={onClose}
+                className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center text-slate-200 hover:text-white transition"
+                title="Close Member Sheet"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 4 Tactile 3D KPI Cubes */}
+          <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+            <button
+              type="button"
+              onClick={() => setActiveSubtab('tasks')}
+              className={`cube-3d-tile text-left rounded-2xl px-4 py-3 border transition ${
+                activeSubtab === 'tasks'
+                  ? 'bg-gradient-to-b from-blue-600 to-blue-700 border-blue-400/60 text-white'
+                  : 'bg-white/10 border-white/15 text-slate-100 hover:bg-white/15'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[11px] font-bold opacity-85">
+                <span>{language === 'my' ? 'စုစုပေါင်း Task' : 'Total Tasks'}</span>
+                <CheckSquare className="w-4 h-4" />
+              </div>
+              <div className="text-xl font-black tabular-nums mt-0.5">
+                {memberTasks.length}
+                <span className="text-[11px] font-semibold opacity-80 ml-1.5">
+                  ({activeTaskCount} active)
+                </span>
+              </div>
+            </button>
 
             <button
-              onClick={onClose}
-              className="text-slate-400 hover:text-white p-1 rounded-md transition ml-1"
+              type="button"
+              onClick={() => setActiveSubtab('leaves')}
+              className={`cube-3d-tile text-left rounded-2xl px-4 py-3 border transition ${
+                activeSubtab === 'leaves'
+                  ? 'bg-gradient-to-b from-teal-600 to-teal-700 border-teal-400/60 text-white'
+                  : 'bg-white/10 border-white/15 text-slate-100 hover:bg-white/15'
+              }`}
             >
-              <X className="w-5 h-5" />
+              <div className="flex items-center justify-between text-[11px] font-bold opacity-85">
+                <span>{language === 'my' ? 'ခွင့်ရက် စုစုပေါင်း' : 'Leave Days'}</span>
+                <CalendarDays className="w-4 h-4" />
+              </div>
+              <div className="text-xl font-black tabular-nums mt-0.5">
+                {totalLeaveDays} <span className="text-xs font-semibold opacity-85">days</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubtab('training')}
+              className={`cube-3d-tile text-left rounded-2xl px-4 py-3 border transition ${
+                activeSubtab === 'training'
+                  ? 'bg-gradient-to-b from-purple-600 to-purple-700 border-purple-400/60 text-white'
+                  : 'bg-white/10 border-white/15 text-slate-100 hover:bg-white/15'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[11px] font-bold opacity-85">
+                <span>{language === 'my' ? 'Training Topics & နာရီ' : 'Topics & Hours'}</span>
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="text-xl font-black tabular-nums mt-0.5">
+                {totalTrainingHours.toFixed(1)}{' '}
+                <span className="text-xs font-semibold opacity-85">
+                  hrs · {memberTraining.length} topics
+                </span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSubtab('attendance');
+                setViewAllMonths(false);
+              }}
+              className={`cube-3d-tile text-left rounded-2xl px-4 py-3 border transition ${
+                activeSubtab === 'attendance'
+                  ? 'bg-gradient-to-b from-emerald-600 to-emerald-700 border-emerald-400/60 text-white'
+                  : 'bg-white/10 border-white/15 text-slate-100 hover:bg-white/15'
+              }`}
+            >
+              <div className="flex items-center justify-between text-[11px] font-bold opacity-85">
+                <span>
+                  {language === 'my'
+                    ? `ရုံးတက် & ခွင့် (${formatMonthLabel(selectedMonth, language)})`
+                    : `Attendance (${formatMonthLabel(selectedMonth, language)})`}
+                </span>
+                <Building2 className="w-4 h-4 text-emerald-300" />
+              </div>
+              <div className="text-xl font-black tabular-nums mt-0.5">
+                {monthlyAttendance.officePresentDays}d{' '}
+                <span className="text-xs font-semibold opacity-90">
+                  {language === 'my' ? 'တက်' : 'in'} · {monthlyAttendance.approvedLeaveDaysInMonth}d{' '}
+                  {language === 'my' ? 'ခွင့်' : 'leave'}
+                </span>
+              </div>
             </button>
           </div>
         </div>
 
-        {/* Subtabs & Permission Indicator Bar */}
-        <div className="bg-slate-100 border-b border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          {/* Subtab Buttons */}
-          <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+        {/* Subtabs & Quick Action Bar */}
+        <div className="bg-white border-b border-slate-200 px-5 sm:px-7 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setActiveSubtab('tasks')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition ${
                 activeSubtab === 'tasks'
                   ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
               <CheckSquare className="w-3.5 h-3.5" />
-              <span>{t.tabTasks} ({memberTasks.length})</span>
+              <span>Tasks ({monthTasks.length})</span>
             </button>
 
             <button
               onClick={() => setActiveSubtab('leaves')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition ${
                 activeSubtab === 'leaves'
                   ? 'bg-teal-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
               <CalendarDays className="w-3.5 h-3.5" />
-              <span>{t.tabLeave} ({memberLeaves.length})</span>
+              <span>Leaves ({monthLeaves.length})</span>
             </button>
 
             <button
               onClick={() => setActiveSubtab('training')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition ${
                 activeSubtab === 'training'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  ? 'bg-purple-700 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>{t.tabTraining} ({totalTrainingHours.toFixed(1)} hrs)</span>
+              <span>Topics / Training ({monthTraining.length})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveSubtab('attendance');
+                setViewAllMonths(false);
+              }}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold transition ${
+                activeSubtab === 'attendance'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>
+                {language === 'my'
+                  ? `ရုံးတက် & ခွင့် (${monthlyAttendance.officePresentDays}/${monthlyAttendance.workingDaysInMonth})`
+                  : `Attendance & Leave (${monthlyAttendance.officePresentDays}/${monthlyAttendance.workingDaysInMonth})`}
+              </span>
             </button>
           </div>
 
-          {/* Permission / Status Badge */}
-          <div className="flex items-center gap-2 font-semibold text-[11px]">
-            {isMe ? (
-              <span className="text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5" />
-                {t.myPersonalSheet}
-              </span>
-            ) : isAdmin ? (
-              <span className="text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-full flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                {language === 'my' ? 'Admin အခွင့်အရေး - စိတ်ကြိုက် ပြင်/ဖျက်/ခွင့်ပြုနိုင်သည်' : 'Admin: Full Control'}
-              </span>
-            ) : (
-              <span className="text-slate-600 bg-slate-200/80 px-2.5 py-1 rounded-full flex items-center gap-1">
-                <User className="w-3.5 h-3.5" />
-                <span>{member.name} ၏ အချက်အလက်များ</span>
-              </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isViewer && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() =>
+                    onOpenAddTask(
+                      member,
+                      viewAllMonths ? undefined : getDefaultDateForMonthWeek(selectedMonth, selectedWeek)
+                    )
+                  }
+                  className="cube-3d-tile flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Task</span>
+                </button>
+                <button
+                  onClick={() =>
+                    onOpenAddLeave(
+                      member,
+                      viewAllMonths ? undefined : getDefaultDateForMonthWeek(selectedMonth, selectedWeek)
+                    )
+                  }
+                  className="cube-3d-tile flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-xl"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Leave</span>
+                </button>
+                <button
+                  onClick={() =>
+                    onOpenAddTraining(
+                      member,
+                      viewAllMonths ? undefined : getDefaultDateForMonthWeek(selectedMonth, selectedWeek)
+                    )
+                  }
+                  className="cube-3d-tile flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Topic</span>
+                </button>
+              </div>
             )}
+
+            <span className="text-[11px] font-semibold text-slate-600 hidden md:inline-flex items-center gap-1 pl-2 border-l border-slate-200">
+              {isMe ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="text-blue-700">{t.myPersonalSheet}</span>
+                </>
+              ) : isAdmin ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" />
+                  <span className="text-purple-700">Admin Full Control</span>
+                </>
+              ) : (
+                <>
+                  <User className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{member.name}</span>
+                </>
+              )}
+            </span>
           </div>
         </div>
 
-        {/* Subtab Contents Container */}
-        <div className="p-6 overflow-y-auto flex-grow space-y-4 bg-slate-50/50">
-          {/* SUBTAB 1: TASKS */}
-          {activeSubtab === 'tasks' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
-                    {language === 'my' ? `"${member.name}" ၏ လုပ်ငန်းတာဝန်များ` : `Tasks Assigned to ${member.name}`}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {language === 'my'
-                      ? 'Task များ တိုက်ရိုက်ထည့်သွင်းခြင်း၊ ပြင်ဆင်ခြင်း၊ ဖျက်ခြင်းနှင့် မှတ်ချက် ရေးသားခြင်း'
-                      : 'Add, edit, delete tasks and write progress comments'}
-                  </p>
-                </div>
-                {!isViewer && (
-                  <button
-                    onClick={() => onOpenAddTask(member)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Task for {member.name}</span>
-                  </button>
-                )}
-              </div>
+        {/* Month & Weekly Breakdown Bar (1st Week, 2nd Week, 3rd Week, 4th Week, 5th Week) */}
+        <div className="bg-slate-50 border-b border-slate-200 px-5 sm:px-7 py-3 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Month Navigator */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewAllMonths(false);
+                  setSelectedMonth((prev) => shiftMonth(prev, -1));
+                }}
+                className="p-1.5 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 transition shadow-2xs"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
 
-              {memberTasks.length === 0 ? (
-                <div className="p-8 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-2">
-                  <CheckSquare className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-500 italic">
-                    {language === 'my' ? 'ဤအဖွဲ့ဝင်တွင် Task မရှိသေးပါ။' : `No tasks assigned to ${member.name} yet.`}
-                  </p>
-                  {!isViewer && (
-                    <button
-                      onClick={() => onOpenAddTask(member)}
-                      className="text-xs font-bold text-blue-600 hover:underline"
-                    >
-                      {language === 'my' ? `+ ${member.name} အတွက် Task စတင်ထည့်သွင်းရန်` : `+ Add task for ${member.name}`}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">Task Title</th>
-                        <th className="p-3">Due Date</th>
-                        <th className="p-3">Next Follow-up</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3">Latest Note</th>
-                        <th className="p-3 text-center">Manage / Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {memberTasks.map((task) => {
-                        const isOverdue = task.status === 'Overdue';
-                        const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
-                        const canEditTask = (isMyTask || hasSheetControl) && !isViewer;
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setSelectedMonth(e.target.value);
+                    setViewAllMonths(false);
+                  }
+                }}
+                className="text-xs font-bold px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+              />
 
-                        return (
-                          <tr key={task.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="p-3 font-semibold text-slate-900 max-w-xs">
-                              <span className="block font-bold">{task.title}</span>
-                              {isMyTask && (
-                                <span className="inline-block text-[9px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.2 rounded mt-0.5">
-                                  {language === 'my' ? 'သင့် Task' : 'Your Task'}
-                                </span>
-                              )}
-                            </td>
-                            <td className={`p-3 tabular-nums ${isOverdue ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
-                              {task.due}
-                            </td>
-                            <td className="p-3 tabular-nums text-slate-600">
-                              {task.followup}
-                            </td>
-                            <td className="p-3">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                  task.status === 'Completed'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : task.status === 'Overdue'
-                                    ? 'bg-red-100 text-red-800'
-                                    : task.status === 'Waiting'
-                                    ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-blue-100 text-blue-800'
-                                }`}
-                              >
-                                {task.status}
-                              </span>
-                            </td>
-                            <td className="p-3 text-slate-500 max-w-xs truncate">
-                              {task.note || '-'}
-                            </td>
-                            <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                {/* Comment button */}
-                                <button
-                                  onClick={() => onOpenComments(task)}
-                                  className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-bold text-xs transition"
-                                  title={t.comments}
-                                >
-                                  <MessageSquare className="w-3.5 h-3.5" />
-                                  <span>({task.comments ? task.comments.length : 0})</span>
-                                </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewAllMonths(false);
+                  setSelectedMonth((prev) => shiftMonth(prev, 1));
+                }}
+                className="p-1.5 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 text-slate-700 transition shadow-2xs"
+                title="Next Month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
 
-                                {/* Direct Edit Button (Core Requirement) */}
-                                {canEditTask && (
-                                  <>
-                                    <button
-                                      onClick={() => onOpenEditTask(task)}
-                                      className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded font-bold text-xs transition"
-                                      title={language === 'my' ? 'Task ပြင်ဆင်ရန်' : 'Edit task'}
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                      <span>{language === 'my' ? 'ပြင်ရန်' : 'Edit'}</span>
-                                    </button>
-
-                                    {/* Direct Delete Button (Core Requirement) */}
-                                    <button
-                                      onClick={() => {
-                                        if (
-                                          confirm(
-                                            language === 'my'
-                                              ? `"${task.title}" ကို ဖျက်ရန် သေချာပါသလား?`
-                                              : `Delete task "${task.title}"?`
-                                          )
-                                        ) {
-                                          onDeleteTask(task.id);
-                                        }
-                                      }}
-                                      className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-bold text-xs transition"
-                                      title={language === 'my' ? 'Task ဖျက်ရန်' : 'Delete task'}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      <span>{language === 'my' ? 'ဖျက်ရန်' : 'Del'}</span>
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setViewAllMonths((prev) => !prev)}
+                disabled={activeSubtab === 'attendance'}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${
+                  activeSubtab === 'attendance'
+                    ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                    : viewAllMonths
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                {language === 'my' ? 'လအားလုံးကြည့်မည်' : 'All Months'}
+              </button>
             </div>
-          )}
 
-          {/* SUBTAB 2: LEAVES */}
-          {activeSubtab === 'leaves' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
-                    {language === 'my' ? `"${member.name}" ၏ ခွင့်ရက်မှတ်တမ်းများ` : `Leave Requests for ${member.name}`}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {language === 'my'
-                      ? 'ခွင့်ရက် တင်သွင်းခြင်း၊ ပြင်ဆင်ခြင်း၊ ဖျက်ခြင်းနှင့် Admin အတည်ပြုချက်'
-                      : 'Submit, edit, delete leave records and manage approval'}
-                  </p>
-                </div>
-                {!isViewer && (
-                  <button
-                    onClick={() => onOpenAddLeave(member)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Leave for {member.name}</span>
-                  </button>
-                )}
-              </div>
-
-              {memberLeaves.length === 0 ? (
-                <div className="p-8 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-2">
-                  <CalendarDays className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-500 italic">
-                    {language === 'my' ? 'ခွင့်မှတ်တမ်း မရှိသေးပါ။' : `No leave records logged for ${member.name}.`}
-                  </p>
-                  {!isViewer && (
-                    <button
-                      onClick={() => onOpenAddLeave(member)}
-                      className="text-xs font-bold text-teal-600 hover:underline"
-                    >
-                      {language === 'my' ? `+ ${member.name} အတွက် ခွင့်တောင်းခံလွှာ တင်သွင်းရန်` : `+ Submit leave request for ${member.name}`}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">Leave Type</th>
-                        <th className="p-3">Duration</th>
-                        <th className="p-3">Date Range</th>
-                        <th className="p-3">Reason</th>
-                        <th className="p-3">Status</th>
-                        <th className="p-3 text-center">Manage / Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {memberLeaves.map((leave) => {
-                        const canEditLeave = (isMe || isAdmin) && !isViewer;
-
-                        return (
-                          <tr key={leave.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="p-3 font-semibold text-slate-900">
-                              {leave.type}
-                            </td>
-                            <td className="p-3 font-bold text-slate-700 tabular-nums">
-                              {leave.duration} Days
-                            </td>
-                            <td className="p-3 tabular-nums text-slate-600">
-                              {leave.start} ~ {leave.end}
-                            </td>
-                            <td className="p-3 text-slate-500 max-w-xs truncate">
-                              {leave.reason}
-                            </td>
-                            <td className="p-3">
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                  leave.status === 'Approved'
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : leave.status === 'Rejected'
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {leave.status}
-                              </span>
-                              {leave.approvedBy && (
-                                <span className="block text-[10px] text-slate-400">
-                                  by {leave.approvedBy}
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                {/* Admin Approve / Reject actions */}
-                                {isAdmin && leave.status === 'Pending' && (
-                                  <>
-                                    <button
-                                      onClick={() => onApproveLeave(leave.id, 'Approved')}
-                                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[10px] shadow"
-                                      title={t.approve}
-                                    >
-                                      Approve
-                                    </button>
-                                    <button
-                                      onClick={() => onApproveLeave(leave.id, 'Rejected')}
-                                      className="px-2 py-0.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[10px] shadow"
-                                      title={t.reject}
-                                    >
-                                      Reject
-                                    </button>
-                                  </>
-                                )}
-
-                                {canEditLeave && (
-                                  <>
-                                    <button
-                                      onClick={() => onOpenEditLeave(leave)}
-                                      className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded font-bold text-xs transition"
-                                      title={language === 'my' ? 'ခွင့်ပြင်ရန်' : 'Edit leave'}
-                                    >
-                                      <Edit3 className="w-3.5 h-3.5" />
-                                      <span>{language === 'my' ? 'ပြင်ရန်' : 'Edit'}</span>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        if (
-                                          confirm(
-                                            language === 'my'
-                                              ? 'ဤခွင့်မှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?'
-                                              : 'Delete this leave entry?'
-                                          )
-                                        ) {
-                                          onDeleteLeave(leave.id);
-                                        }
-                                      }}
-                                      className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-bold text-xs transition"
-                                      title={language === 'my' ? 'ခွင့်ဖျက်ရန်' : 'Delete leave'}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                      <span>{language === 'my' ? 'ဖျက်ရန်' : 'Del'}</span>
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+            <div className="text-[11px] font-semibold text-slate-500">
+              {viewAllMonths && activeSubtab !== 'attendance'
+                ? language === 'my'
+                  ? 'လအားလုံးရှိ မှတ်တမ်းများကို ပြသထားသည်'
+                  : 'Showing records across all months'
+                : language === 'my'
+                ? `${formatMonthLabel(selectedMonth, language)} အတွက် အပတ်စဉ်ခွဲခြားမှု`
+                : `Weekly Breakdown · ${formatMonthLabel(selectedMonth, language)}`}
             </div>
-          )}
+          </div>
 
-          {/* SUBTAB 3: TRAINING HOURS */}
-          {activeSubtab === 'training' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
-                    {language === 'my' ? `"${member.name}" ၏ သင်တန်းနာရီ မှတ်တမ်းများ` : `Training Hours for ${member.name}`}
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    {language === 'my'
-                      ? `စုစုပေါင်း သင်တန်းနာရီ: ${totalTrainingHours.toFixed(1)} hrs • ပုံသေနည်း: (ပြီးဆုံးချိန် − စတင်ချိန်) − အနားယူချိန်`
-                      : `Total Accumulated: ${totalTrainingHours.toFixed(1)} hrs • Formula: (End - Start) - Break`}
-                  </p>
-                </div>
-                {!isViewer && (
+          {/* 1st Week, 2nd Week, 3rd Week, 4th Week, 5th Week Cubes */}
+          {(!viewAllMonths || activeSubtab === 'attendance') && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedWeek('all')}
+                className={`cube-3d-tile px-3 py-1.5 rounded-xl text-xs font-bold border transition ${
+                  selectedWeek === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {language === 'my' ? 'တစ်လလုံး (All Weeks)' : 'All Weeks'} ·{' '}
+                <span className="tabular-nums">
+                  {activeSubtab === 'tasks'
+                    ? monthTasks.length
+                    : activeSubtab === 'leaves'
+                    ? monthLeaves.length
+                    : activeSubtab === 'attendance'
+                    ? `${monthlyAttendance.officePresentDays}d`
+                    : monthTraining.length}
+                </span>
+              </button>
+
+              {weeksInMonth.map((wk) => {
+                const wkCount = getRecordCountForWeek(wk);
+                const isSelected = selectedWeek === wk;
+                return (
                   <button
-                    onClick={() => onOpenAddTraining(member)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-lg shadow-sm transition"
+                    key={wk}
+                    type="button"
+                    onClick={() => setSelectedWeek(wk)}
+                    className={`cube-3d-tile px-3 py-1.5 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                      isSelected
+                        ? activeSubtab === 'tasks'
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : activeSubtab === 'leaves'
+                          ? 'bg-teal-600 text-white border-teal-600'
+                          : activeSubtab === 'attendance'
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-purple-700 text-white border-purple-700'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Training for {member.name}</span>
-                  </button>
-                )}
-              </div>
-
-              {memberTraining.length === 0 ? (
-                <div className="p-8 text-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-2">
-                  <Clock className="w-8 h-8 text-slate-300 mx-auto" />
-                  <p className="text-xs text-slate-500 italic">
-                    {language === 'my' ? 'သင်တန်းမှတ်တမ်း မရှိသေးပါ။' : `No training sessions logged for ${member.name}.`}
-                  </p>
-                  {!isViewer && (
-                    <button
-                      onClick={() => onOpenAddTraining(member)}
-                      className="text-xs font-bold text-purple-700 hover:underline"
+                    <span>{getWeekOrdinal(wk)}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded font-extrabold tabular-nums ${
+                        isSelected
+                          ? 'bg-white/20 text-white'
+                          : wkCount > 0
+                          ? 'bg-slate-900/10 text-slate-900'
+                          : 'text-slate-400'
+                      }`}
                     >
-                      {language === 'my' ? `+ ${member.name} အတွက် သင်တန်းနာရီ စတင်ထည့်သွင်းရန်` : `+ Log training session for ${member.name}`}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-100 font-bold text-slate-700 border-b border-slate-200">
-                      <tr>
-                        <th className="p-3">Course / Session</th>
-                        <th className="p-3">Date</th>
-                        <th className="p-3">Time Window</th>
-                        <th className="p-3">Break</th>
-                        <th className="p-3">Calculated Hours</th>
-                        <th className="p-3 text-center">Manage / Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {memberTraining.map((tr) => {
-                        const canEditTraining = (isMe || isAdmin) && !isViewer;
-
-                        return (
-                          <tr key={tr.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="p-3 font-semibold text-slate-900 max-w-xs">
-                              {tr.name}
-                            </td>
-                            <td className="p-3 tabular-nums text-slate-600">
-                              {tr.date}
-                            </td>
-                            <td className="p-3 tabular-nums text-slate-600">
-                              {tr.start} ~ {tr.end}
-                            </td>
-                            <td className="p-3 tabular-nums text-slate-600">
-                              {tr.breakHrs} hr
-                            </td>
-                            <td className="p-3 font-bold text-purple-700 tabular-nums">
-                              {tr.calculatedHours.toFixed(1)} hrs
-                            </td>
-                            <td className="p-3 text-center">
-                              {canEditTraining ? (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => onOpenEditTraining(tr)}
-                                    className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded font-bold text-xs transition"
-                                    title={language === 'my' ? 'သင်တန်းပြင်ရန်' : 'Edit training'}
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                    <span>{language === 'my' ? 'ပြင်ရန်' : 'Edit'}</span>
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (
-                                        confirm(
-                                          language === 'my'
-                                            ? 'ဤသင်တန်းမှတ်တမ်းကို ဖျက်ရန် သေချာပါသလား?'
-                                            : 'Delete this training session?'
-                                        )
-                                      ) {
-                                        onDeleteTraining(tr.id);
-                                      }
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded font-bold text-xs transition"
-                                    title={language === 'my' ? 'သင်တန်းဖျက်ရန်' : 'Delete training'}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                    <span>{language === 'my' ? 'ဖျက်ရန်' : 'Del'}</span>
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 text-[11px]">-</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      {wkCount}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
+
+        {/* Scrollable 3D Sheet Body */}
+        <div className="p-5 sm:p-7 overflow-y-auto flex-grow space-y-4 bg-gradient-to-b from-slate-100 to-slate-200/70">
+          {renderActiveRecords()}
+        </div>
       </div>
+
+      {/* In-App Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!pendingConfirm}
+        onClose={() => setPendingConfirm(null)}
+        onConfirm={() => {
+          pendingConfirm?.onConfirm();
+          setPendingConfirm(null);
+        }}
+        title={pendingConfirm?.title}
+        message={pendingConfirm?.message}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        isDestructive={pendingConfirm?.isDestructive ?? true}
+        language={language}
+      />
     </div>
   );
 };

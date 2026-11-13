@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { TaskItem, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import {
+  WEEKDAY_CODES,
+  WeekdayCode,
+  getMonthKey,
+  getDayOfWeekCode,
+  getWeekOfMonth,
+  getWeeksInMonth,
+  getWeekOrdinal,
+  getDefaultDateForMonthWeek,
+  getDateForWeekAndWeekday,
+  formatMonthLabel,
+} from '../utils/weekHelpers';
 import { X, Check, CheckSquare } from 'lucide-react';
 
 interface TaskModalProps {
@@ -8,6 +20,7 @@ interface TaskModalProps {
   onClose: () => void;
   taskToEdit: TaskItem | null;
   targetMember?: UserProfile | null;
+  defaultDate?: string;
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onSaveTask: (taskData: Partial<TaskItem>) => void;
@@ -19,6 +32,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onClose,
   taskToEdit,
   targetMember,
+  defaultDate,
   currentUser,
   allUsers,
   onSaveTask,
@@ -40,21 +54,46 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setOwnerId(taskToEdit.ownerId || (targetMember ? targetMember.id : currentUser.id));
       setDue(taskToEdit.due);
       setFollowup(taskToEdit.followup);
-      setDay(taskToEdit.day || 'Wed');
+      setDay(taskToEdit.day || getDayOfWeekCode(taskToEdit.due));
       setStatus(taskToEdit.status);
       setNote(taskToEdit.note || '');
     } else {
+      const initDate = defaultDate || new Date().toISOString().split('T')[0];
       setTitle('');
       setOwnerId(targetMember ? targetMember.id : currentUser.id);
-      setDue(new Date().toISOString().split('T')[0]);
-      setFollowup(new Date().toISOString().split('T')[0]);
-      setDay('Wed');
+      setDue(initDate);
+      setFollowup(initDate);
+      setDay(getDayOfWeekCode(initDate));
       setStatus('Active');
       setNote('');
     }
-  }, [taskToEdit, targetMember, currentUser, isOpen]);
+  }, [taskToEdit, targetMember, defaultDate, currentUser, isOpen]);
 
   if (!isOpen) return null;
+
+  const selectedMonthKey = getMonthKey(due);
+  const selectedWeek = getWeekOfMonth(due);
+  const weeksInMonth = getWeeksInMonth(selectedMonthKey);
+  const resolvedWeekday = getDayOfWeekCode(due);
+
+  const handleDueChange = (nextDate: string) => {
+    setDue(nextDate);
+    if (nextDate) {
+      setDay(getDayOfWeekCode(nextDate));
+    }
+  };
+
+  const handleSelectWeek = (wk: 1 | 2 | 3 | 4 | 5) => {
+    const nextDate = getDefaultDateForMonthWeek(selectedMonthKey, wk, day);
+    setDue(nextDate);
+    setDay(getDayOfWeekCode(nextDate));
+  };
+
+  const handleSelectWeekday = (wd: WeekdayCode) => {
+    const nextDate = getDateForWeekAndWeekday(selectedMonthKey, selectedWeek, wd);
+    setDue(nextDate);
+    setDay(getDayOfWeekCode(nextDate));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +117,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
@@ -144,11 +183,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </option>
                   ))}
               </select>
-              <span className="text-[10px] text-slate-500 block mt-0.5">
-                {language === 'my'
-                  ? `တာဝန်ယူသူအဖြစ် ${allUsers.find((u) => u.id === ownerId)?.name || ''} ကို တိုက်ရိုက်သတ်မှတ်ထားပါသည်`
-                  : `Assigning task to ${allUsers.find((u) => u.id === ownerId)?.name || ''}`}
-              </span>
             </div>
 
             <div>
@@ -157,7 +191,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </label>
               <select
                 value={day}
-                onChange={(e) => setDay(e.target.value as TaskItem['day'])}
+                onChange={(e) => handleSelectWeekday(e.target.value as WeekdayCode)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
               >
                 <option value="Mon">Monday (တနင်္လာ)</option>
@@ -174,14 +208,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           {/* Due Date & Next Followup Date */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t.dueDate} <span className="text-red-500">*</span>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t.dueDate} <span className="text-red-500">*</span></span>
+                <span className="text-[10px] font-bold text-blue-700">
+                  {formatMonthLabel(selectedMonthKey, language)} · {getWeekOrdinal(selectedWeek)} · {resolvedWeekday}
+                </span>
               </label>
               <input
                 type="date"
                 required
                 value={due}
-                onChange={(e) => setDue(e.target.value)}
+                onChange={(e) => handleDueChange(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -197,6 +234,53 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onChange={(e) => setFollowup(e.target.value)}
                 className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+          </div>
+
+          {/* Auto-Synced Week & Weekday Quick Selector */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2.5">
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'လအလိုက် အပတ်စဉ် (Date ရွေးလျှင် အလိုအလျောက်ရွေးပေးမည်)' : 'Week of Month (auto-syncs with date)'}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {weeksInMonth.map((wk) => (
+                  <button
+                    key={wk}
+                    type="button"
+                    onClick={() => handleSelectWeek(wk)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                      selectedWeek === wk
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    {getWeekOrdinal(wk)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-[10px] font-bold text-slate-600 mb-1.5">
+                {language === 'my' ? 'နေ့ရက် (Mon – Sun တိုက်ရိုက်ရွေးရန်)' : 'Weekday (Mon – Sun quick select)'}
+              </span>
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAY_CODES.map((wd) => (
+                  <button
+                    key={wd}
+                    type="button"
+                    onClick={() => handleSelectWeekday(wd)}
+                    className={`py-1 rounded-lg text-[11px] font-bold transition ${
+                      day === wd
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    {wd}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

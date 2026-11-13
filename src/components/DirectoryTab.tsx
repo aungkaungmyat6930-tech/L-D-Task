@@ -1,24 +1,26 @@
 import React, { useState } from 'react';
-import { UserProfile, TaskItem, LeaveRequest, TrainingLog, MemberStatus } from '../types';
+import {
+  UserProfile,
+  TaskItem,
+  LeaveRequest,
+  TrainingLog,
+  MemberStatus,
+  AttendanceRecord,
+} from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
+import { computeMemberMonthlyAttendance } from '../utils/attendanceHelpers';
+import { exportAllMembersMonthlyExcel } from '../utils/excelExport';
 import { 
   Users, 
   ArrowRight, 
   UserPen, 
   UserPlus, 
   MessageSquare, 
-  Filter, 
-  AlertTriangle,
-  Clock,
-  Sparkles,
   Search,
   Plus,
-  CheckCircle2,
-  AlertCircle,
-  UserCheck,
-  UserMinus,
   Edit3,
-  Trash2
+  Trash2,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -28,6 +30,8 @@ interface DirectoryTabProps {
   tasks: TaskItem[];
   leaves: LeaveRequest[];
   trainingLogs: TrainingLog[];
+  attendanceOverrides: AttendanceRecord[];
+  onNotify?: (msg: string) => void;
   onOpenMemberSheet: (member: UserProfile) => void;
   onOpenEditProfile: (user?: UserProfile) => void;
   onOpenAddTask: (targetMember?: UserProfile) => void;
@@ -47,6 +51,8 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   tasks,
   leaves,
   trainingLogs,
+  attendanceOverrides,
+  onNotify,
   onOpenMemberSheet,
   onOpenEditProfile,
   onOpenAddTask,
@@ -62,10 +68,27 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   const t = TRANSLATIONS[language];
   const [taskFilter, setTaskFilter] = useState<'all' | 'my' | 'overdue' | 'followup'>('all');
   const [memberFilter, setMemberFilter] = useState<'all' | 'active' | 'resigned'>('all');
+  const [reportMonth, setReportMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [searchQuery, setSearchQuery] = useState('');
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
 
   const isAdmin = currentUser.roleTier === 'ADMIN';
+
+  const handleExportAllExcel = () => {
+    const filename = exportAllMembersMonthlyExcel({
+      users: allUsers,
+      monthKey: reportMonth,
+      tasks,
+      leaves,
+      trainingLogs,
+      attendanceOverrides,
+    });
+    onNotify?.(
+      language === 'my'
+        ? `Excel ဖိုင် "${filename}" ကို ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ။`
+        : `Exported ${filename}`
+    );
+  };
 
   // Counts for staff status
   const activeMembersCount = allUsers.filter((u) => (u.status || 'Active') === 'Active').length;
@@ -162,40 +185,63 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
             </p>
           </div>
 
-          {/* Onboarding / Offboarding (အဝင်/အထွက်) Member Filter Tabs */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-            <button
-              onClick={() => setMemberFilter('all')}
-              className={`px-3 py-1 rounded-lg transition ${
-                memberFilter === 'all'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {language === 'my' ? 'အားလုံး' : 'All'} ({allUsers.length})
-            </button>
-            <button
-              onClick={() => setMemberFilter('active')}
-              className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
-                memberFilter === 'active'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-emerald-700 hover:bg-emerald-50'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>{language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (အဝင်)' : 'Active (In)'} ({activeMembersCount})</span>
-            </button>
-            <button
-              onClick={() => setMemberFilter('resigned')}
-              className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
-                memberFilter === 'resigned'
-                  ? 'bg-red-600 text-white shadow-xs'
-                  : 'text-red-700 hover:bg-red-50'
-              }`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-              <span>{language === 'my' ? 'နုတ်ထွက်ပြီး (အထွက်)' : 'Resigned (Out)'} ({resignedMembersCount})</span>
-            </button>
+          {/* Month Selector, Team Excel Export & Onboarding/Offboarding Filter Tabs */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-xl shadow-2xs">
+              <input
+                type="month"
+                value={reportMonth}
+                onChange={(e) => {
+                  if (e.target.value) setReportMonth(e.target.value);
+                }}
+                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-none"
+                title={language === 'my' ? 'ရုံးတက်/ခွင့် စာရင်းလ ရွေးချယ်ရန်' : 'Select month for attendance & Excel export'}
+              />
+              <button
+                type="button"
+                onClick={handleExportAllExcel}
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition shadow-2xs"
+                title={language === 'my' ? 'အဖွဲ့တစ်ခုလုံး၏ ရုံးတက် & ခွင့် Excel ထုတ်ရန်' : 'Export Team Attendance & Leave Excel (.xlsx)'}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'Team Excel (.xlsx)' : 'Team Excel (.xlsx)'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+              <button
+                onClick={() => setMemberFilter('all')}
+                className={`px-3 py-1 rounded-lg transition ${
+                  memberFilter === 'all'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {language === 'my' ? 'အားလုံး' : 'All'} ({allUsers.length})
+              </button>
+              <button
+                onClick={() => setMemberFilter('active')}
+                className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
+                  memberFilter === 'active'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>{language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (အဝင်)' : 'Active (In)'} ({activeMembersCount})</span>
+              </button>
+              <button
+                onClick={() => setMemberFilter('resigned')}
+                className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
+                  memberFilter === 'resigned'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-red-700 hover:bg-red-50'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                <span>{language === 'my' ? 'နုတ်ထွက်ပြီး (အထွက်)' : 'Resigned (Out)'} ({resignedMembersCount})</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -204,11 +250,18 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
             const isMe = user.id === currentUser.id || user.name === currentUser.name;
             const isResigned = user.status === 'Resigned';
             const uTasks = tasks.filter((t) => t.ownerId === user.id || t.ownerName === user.name);
-            const uLeaves = leaves.filter((l) => l.memberId === user.id || l.memberName === user.name);
             const uTraining = trainingLogs.filter(
               (tr) => tr.attendeeIds?.includes(user.id) || tr.attendeeNames?.includes(user.name)
             );
             const uHours = uTraining.reduce((sum, tr) => sum + (tr.calculatedHours || 0), 0);
+            const uAttendance = computeMemberMonthlyAttendance(
+              user,
+              reportMonth,
+              leaves,
+              trainingLogs,
+              tasks,
+              attendanceOverrides
+            );
 
             return (
               <div
@@ -272,8 +325,8 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                   <p className="text-[10px] text-slate-400 truncate">{user.dept || 'L&D Dept'}</p>
                 </div>
 
-                {/* Micro Stats Bar */}
-                <div className="mt-3 pt-2.5 border-t border-slate-100 grid grid-cols-3 gap-1 text-center">
+                {/* Micro Stats Bar: Tasks, Office Days, Leave Days, Training Hours */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 grid grid-cols-4 gap-1 text-center">
                   <div className="bg-blue-50/60 p-1 rounded-md">
                     <span className="text-[9px] text-blue-600 font-bold uppercase block">
                       Tasks
@@ -282,12 +335,20 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                       {uTasks.length}
                     </span>
                   </div>
-                  <div className="bg-teal-50/60 p-1 rounded-md">
+                  <div className="bg-emerald-50/70 p-1 rounded-md" title={language === 'my' ? `${reportMonth} ရုံးတက်ရက်` : `${reportMonth} Office Days`}>
+                    <span className="text-[9px] text-emerald-700 font-bold uppercase block">
+                      {language === 'my' ? 'ရုံးတက်' : 'Office'}
+                    </span>
+                    <span className="text-xs font-extrabold text-emerald-900 tabular-nums">
+                      {uAttendance.officePresentDays}d
+                    </span>
+                  </div>
+                  <div className="bg-teal-50/60 p-1 rounded-md" title={language === 'my' ? `${reportMonth} ခွင့်ရက်` : `${reportMonth} Leave Days`}>
                     <span className="text-[9px] text-teal-600 font-bold uppercase block">
-                      Leaves
+                      {language === 'my' ? 'ခွင့်' : 'Leave'}
                     </span>
                     <span className="text-xs font-extrabold text-teal-900 tabular-nums">
-                      {uLeaves.length}
+                      {uAttendance.approvedLeaveDaysInMonth}d
                     </span>
                   </div>
                   <div className="bg-purple-50/60 p-1 rounded-md">

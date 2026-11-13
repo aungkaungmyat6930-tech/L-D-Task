@@ -6,7 +6,9 @@ import {
   TrainingLog, 
   StrategicProject, 
   TabType,
-  MemberStatus 
+  MemberStatus,
+  AttendanceRecord,
+  AttendanceOverrideStatus
 } from './types';
 import { 
   INITIAL_USERS, 
@@ -36,6 +38,8 @@ import { LeaveModal } from './components/LeaveModal';
 import { TrainingModal } from './components/TrainingModal';
 import { WorkflowModal } from './components/WorkflowModal';
 import { UserManagementModal } from './components/UserManagementModal';
+import { ConfirmModal } from './components/ConfirmModal';
+import { AdminPasswordModal } from './components/AdminPasswordModal';
 
 const STORAGE_KEYS = {
   USERS: 'kbz_ld_portal_users_v3',
@@ -45,7 +49,12 @@ const STORAGE_KEYS = {
   PROJECTS: 'kbz_ld_portal_projects_v3',
   ACTIVE_USER: 'kbz_ld_portal_active_user_v3',
   LANG: 'kbz_ld_portal_lang_v3',
+  ADMIN_PWD: 'kbz_ld_portal_admin_pwd_v1',
+  ATTENDANCE: 'kbz_ld_portal_attendance_v1',
+  ALLOW_MEMBER_DEADLINE: 'kbz_ld_allow_member_deadline_v1',
 };
+
+const SESSION_ADMIN_UNLOCKED = 'kbz_ld_admin_unlocked_v1';
 
 export default function App() {
   // State Initialization from LocalStorage or Defaults
@@ -58,14 +67,33 @@ export default function App() {
     }
   });
 
+  const [adminPassword, setAdminPassword] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.ADMIN_PWD) || 'admin123';
+    } catch {
+      return 'admin123';
+    }
+  });
+
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(SESSION_ADMIN_UNLOCKED) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
+      const unlocked = sessionStorage.getItem(SESSION_ADMIN_UNLOCKED) === 'true';
       const savedId = localStorage.getItem(STORAGE_KEYS.ACTIVE_USER);
       if (savedId) {
         const found = users.find((u) => u.id === savedId);
-        if (found) return found;
+        if (found && (found.roleTier !== 'ADMIN' || unlocked)) {
+          return found;
+        }
       }
-      return users.find((u) => u.name === 'Aung Kyaw') || users[0];
+      return users.find((u) => u.name === 'Aung Kyaw') || users.find((u) => u.roleTier !== 'ADMIN') || users[0];
     } catch {
       return users[0];
     }
@@ -107,6 +135,24 @@ export default function App() {
     }
   });
 
+  const [attendanceOverrides, setAttendanceOverrides] = useState<AttendanceRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ATTENDANCE);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [allowMemberDeadlineSetup, setAllowMemberDeadlineSetup] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ALLOW_MEMBER_DEADLINE);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
   const [language, setLanguage] = useState<Language>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.LANG);
@@ -122,10 +168,17 @@ export default function App() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isOrgChartModalOpen, setIsOrgChartModalOpen] = useState(false);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // Admin Password Modal States
+  const [adminPwdModalOpen, setAdminPwdModalOpen] = useState(false);
+  const [adminPwdMode, setAdminPwdMode] = useState<'verify' | 'change'>('verify');
+  const [pendingAdminUser, setPendingAdminUser] = useState<UserProfile | null>(null);
 
   // Selected Item Modals
   const [sheetMember, setSheetMember] = useState<UserProfile | null>(null);
   const [actionTargetMember, setActionTargetMember] = useState<UserProfile | null>(null);
+  const [actionDefaultDate, setActionDefaultDate] = useState<string | undefined>(undefined);
   const [profileUserToEdit, setProfileUserToEdit] = useState<UserProfile | null>(null);
 
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -141,20 +194,23 @@ export default function App() {
   const [trainingToEdit, setTrainingToEdit] = useState<TrainingLog | null>(null);
 
   // Quick Direct Action Openers
-  const handleOpenAddTask = (targetMember?: UserProfile) => {
+  const handleOpenAddTask = (targetMember?: UserProfile, defaultDate?: string) => {
     setActionTargetMember(targetMember || null);
+    setActionDefaultDate(defaultDate);
     setTaskToEdit(null);
     setIsTaskModalOpen(true);
   };
 
-  const handleOpenAddLeave = (targetMember?: UserProfile) => {
+  const handleOpenAddLeave = (targetMember?: UserProfile, defaultDate?: string) => {
     setActionTargetMember(targetMember || null);
+    setActionDefaultDate(defaultDate);
     setLeaveToEdit(null);
     setIsLeaveModalOpen(true);
   };
 
-  const handleOpenAddTraining = (targetMember?: UserProfile) => {
+  const handleOpenAddTraining = (targetMember?: UserProfile, defaultDate?: string) => {
     setActionTargetMember(targetMember || null);
+    setActionDefaultDate(defaultDate);
     setTrainingToEdit(null);
     setIsTrainingModalOpen(true);
   };
@@ -200,6 +256,18 @@ export default function App() {
     }
   }, [currentUser]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, adminPassword);
+  }, [adminPassword]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(attendanceOverrides));
+  }, [attendanceOverrides]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.ALLOW_MEMBER_DEADLINE, String(allowMemberDeadlineSetup));
+  }, [allowMemberDeadlineSetup]);
+
   // Auto-evaluate Overdue Tasks
   useEffect(() => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -239,17 +307,70 @@ export default function App() {
     }
   }, [users]);
 
-  // Switch Active User
+  // Switch Active User (Protected by Admin Password when switching to ADMIN)
   const handleSwitchUser = (userId: string) => {
     const found = users.find((u) => u.id === userId);
-    if (found) {
-      setCurrentUser(found);
+    if (!found) return;
+
+    if (found.roleTier === 'ADMIN' && !isAdminUnlocked) {
+      setPendingAdminUser(found);
+      setAdminPwdMode('verify');
+      setAdminPwdModalOpen(true);
+      return;
+    }
+
+    if (found.roleTier !== 'ADMIN' && isAdminUnlocked) {
+      setIsAdminUnlocked(false);
+      sessionStorage.removeItem(SESSION_ADMIN_UNLOCKED);
+    }
+
+    setCurrentUser(found);
+    showToast(
+      language === 'my'
+        ? `အသုံးပြုသူပြောင်းလဲမှု - ${found.name} (${found.roleLabel})`
+        : `Switched user context to ${found.name}`
+    );
+  };
+
+  const handleAdminUnlockSuccess = () => {
+    setIsAdminUnlocked(true);
+    sessionStorage.setItem(SESSION_ADMIN_UNLOCKED, 'true');
+    if (pendingAdminUser) {
+      setCurrentUser(pendingAdminUser);
       showToast(
         language === 'my'
-          ? `အသုံးပြုသူပြောင်းလဲမှု - ${found.name} (${found.roleLabel})`
-          : `Switched user context to ${found.name}`
+          ? `Admin ဝင်ရောက်မှု အောင်မြင်ပါသည် - ${pendingAdminUser.name}`
+          : `Admin authenticated: ${pendingAdminUser.name}`
       );
     }
+    setPendingAdminUser(null);
+    setAdminPwdModalOpen(false);
+  };
+
+  const handleLockAdmin = () => {
+    setIsAdminUnlocked(false);
+    sessionStorage.removeItem(SESSION_ADMIN_UNLOCKED);
+    const fallbackMember =
+      users.find((u) => u.name === 'Aung Kyaw') ||
+      users.find((u) => u.roleTier === 'MEMBER') ||
+      users[0];
+    if (fallbackMember) {
+      setCurrentUser(fallbackMember);
+    }
+    showToast(
+      language === 'my'
+        ? 'Admin အခွင့်အရေးကို Lock ချပြီး Member အကောင့်သို့ ပြောင်းလိုက်ပါပြီ။'
+        : 'Admin session locked. Switched to Member view.'
+    );
+  };
+
+  const handleChangeAdminPassword = (newPwd: string) => {
+    setAdminPassword(newPwd);
+    showToast(
+      language === 'my'
+        ? 'Admin Password အသစ်ကို အောင်မြင်စွာ ပြောင်းလဲသိမ်းဆည်းပြီးပါပြီ။'
+        : 'Admin password updated successfully.'
+    );
   };
 
   // Toggle Language
@@ -259,27 +380,47 @@ export default function App() {
 
   // Reset Data to Default
   const handleResetData = () => {
-    if (
-      confirm(
-        language === 'my'
-          ? 'ဒေတာအားလုံးကို မူလနမူနာ အခြေအနေသို့ ပြန်လည်ထားရှိရန် သေချာပါသလား?'
-          : 'Reset all portal data back to original demo values?'
-      )
-    ) {
-      localStorage.clear();
-      setUsers(INITIAL_USERS);
-      setTasks(INITIAL_TASKS);
-      setLeaves(INITIAL_LEAVES);
-      setTrainingLogs(INITIAL_TRAINING);
-      setProjects(INITIAL_PROJECTS);
-      const defaultUser = INITIAL_USERS.find((u) => u.name === 'Aung Kyaw') || INITIAL_USERS[0];
-      setCurrentUser(defaultUser);
-      showToast(
-        language === 'my'
-          ? 'မူလဒေတာများ အောင်မြင်စွာ ပြန်လည်ရယူပြီးပါပြီ။'
-          : 'Data reset to demo state.'
-      );
-    }
+    setIsResetConfirmOpen(true);
+  };
+
+  const confirmResetData = () => {
+    localStorage.clear();
+    sessionStorage.removeItem(SESSION_ADMIN_UNLOCKED);
+    setIsAdminUnlocked(false);
+    setAdminPassword('admin123');
+    setUsers(INITIAL_USERS);
+    setTasks(INITIAL_TASKS);
+    setLeaves(INITIAL_LEAVES);
+    setTrainingLogs(INITIAL_TRAINING);
+    setProjects(INITIAL_PROJECTS);
+    setAttendanceOverrides([]);
+    setAllowMemberDeadlineSetup(true);
+    const defaultUser = INITIAL_USERS.find((u) => u.name === 'Aung Kyaw') || INITIAL_USERS[0];
+    setCurrentUser(defaultUser);
+    showToast(
+      language === 'my'
+        ? 'မူလဒေတာများ အောင်မြင်စွာ ပြန်လည်ရယူပြီးပါပြီ။'
+        : 'Data reset to demo state.'
+    );
+  };
+
+  const handleSetAttendanceOverride = (
+    memberId: string,
+    date: string,
+    status: AttendanceOverrideStatus | null,
+    note?: string
+  ) => {
+    const id = `${memberId}_${date}`;
+    setAttendanceOverrides((prev) => {
+      const filtered = prev.filter((item) => !(item.memberId === memberId && item.date === date));
+      if (!status) return filtered;
+      return [...filtered, { id, memberId, date, status, note }];
+    });
+    showToast(
+      language === 'my'
+        ? `${date} ရက်နေ့ တက်ရောက်မှု အခြေအနေကို သိမ်းဆည်းပြီးပါပြီ။`
+        : `Attendance status updated for ${date}.`
+    );
   };
 
   // Core Requirement: User Profile / Name Change
@@ -312,9 +453,14 @@ export default function App() {
           return c;
         });
 
+        const updatedCoNames = (t.coAssigneeNames || []).map((cn) =>
+          cn === oldName ? newName : cn
+        );
+
         return {
           ...t,
           ownerName: isOwner ? newName : t.ownerName,
+          coAssigneeNames: t.coAssigneeNames ? updatedCoNames : undefined,
           comments: updatedComments,
         };
       })
@@ -348,10 +494,15 @@ export default function App() {
     // 6. Propagate to Projects
     setProjects((prev) =>
       prev.map((p) => {
-        if (p.ownerId === updatedUser.id || p.ownerName === oldName) {
-          return { ...p, ownerName: newName };
-        }
-        return p;
+        const isOwner = p.ownerId === updatedUser.id || p.ownerName === oldName;
+        const updatedCoNames = (p.coAssigneeNames || []).map((cn) =>
+          cn === oldName ? newName : cn
+        );
+        return {
+          ...p,
+          ownerName: isOwner ? newName : p.ownerName,
+          coAssigneeNames: p.coAssigneeNames ? updatedCoNames : undefined,
+        };
       })
     );
 
@@ -379,6 +530,9 @@ export default function App() {
         title: taskData.title || 'New Task',
         ownerId: taskData.ownerId || currentUser.id,
         ownerName: taskData.ownerName || currentUser.name,
+        coAssigneeIds: taskData.coAssigneeIds,
+        coAssigneeNames: taskData.coAssigneeNames,
+        projectId: taskData.projectId,
         due: taskData.due || new Date().toISOString().split('T')[0],
         followup: taskData.followup || new Date().toISOString().split('T')[0],
         day: taskData.day || 'Wed',
@@ -469,29 +623,69 @@ export default function App() {
     );
   };
 
-  // Add or Update Leave
+  // Add or Update Leave (with Admin HR alignment support)
   const handleSaveLeave = (leaveData: Partial<LeaveRequest>) => {
+    const isAdmin = currentUser.roleTier === 'ADMIN';
+    const todayStr = new Date().toISOString().split('T')[0];
+
     if (leaveData.id) {
       // Edit
       setLeaves((prev) =>
-        prev.map((l) => (l.id === leaveData.id ? ({ ...l, ...leaveData } as LeaveRequest) : l))
+        prev.map((l) => {
+          if (l.id !== leaveData.id) return l;
+          const nextStatus = isAdmin && leaveData.status ? leaveData.status : l.status;
+          const statusChangedByAdmin = isAdmin && leaveData.status && leaveData.status !== l.status;
+          return {
+            ...l,
+            ...leaveData,
+            status: nextStatus,
+            approvedBy:
+              statusChangedByAdmin && (nextStatus === 'Approved' || nextStatus === 'Rejected')
+                ? currentUser.name
+                : nextStatus === 'Pending'
+                ? undefined
+                : l.approvedBy,
+            approvedAt:
+              statusChangedByAdmin && (nextStatus === 'Approved' || nextStatus === 'Rejected')
+                ? todayStr
+                : nextStatus === 'Pending'
+                ? undefined
+                : l.approvedAt,
+          } as LeaveRequest;
+        })
       );
       showToast(
-        language === 'my' ? 'ခွင့်မှတ်တမ်း ပြင်ဆင်ပြီးပါပြီ။' : 'Leave record updated.'
+        language === 'my'
+          ? isAdmin
+            ? 'ခွင့်မှတ်တမ်းနှင့် HR ချိန်ညှိမှုကို သိမ်းဆည်းပြီးပါပြီ။'
+            : 'ခွင့်မှတ်တမ်း ပြင်ဆင်ပြီးပါပြီ။'
+          : 'Leave record updated.'
       );
     } else {
       // New
+      const initialStatus = isAdmin && leaveData.status ? leaveData.status : 'Pending';
       const newLeave: LeaveRequest = {
         id: `l-${Date.now()}`,
         memberId: leaveData.memberId || currentUser.id,
         memberName: leaveData.memberName || currentUser.name,
         type: leaveData.type || 'Casual Leave',
-        start: leaveData.start || new Date().toISOString().split('T')[0],
-        end: leaveData.end || new Date().toISOString().split('T')[0],
+        start: leaveData.start || todayStr,
+        end: leaveData.end || todayStr,
         duration: leaveData.duration || 1,
         reason: leaveData.reason || '',
-        status: 'Pending',
-        createdAt: new Date().toISOString().split('T')[0],
+        status: initialStatus,
+        approvedBy:
+          isAdmin && (initialStatus === 'Approved' || initialStatus === 'Rejected')
+            ? currentUser.name
+            : undefined,
+        approvedAt:
+          isAdmin && (initialStatus === 'Approved' || initialStatus === 'Rejected')
+            ? todayStr
+            : undefined,
+        hrRefId: isAdmin ? leaveData.hrRefId : undefined,
+        hrSynced: isAdmin ? leaveData.hrSynced : false,
+        adminNote: isAdmin ? leaveData.adminNote : undefined,
+        createdAt: todayStr,
       };
       setLeaves((prev) => [newLeave, ...prev]);
       showToast(
@@ -587,9 +781,13 @@ export default function App() {
       title: proj.title || 'New Initiative',
       ownerId: proj.ownerId || currentUser.id,
       ownerName: proj.ownerName || currentUser.name,
+      coAssigneeIds: proj.coAssigneeIds || [],
+      coAssigneeNames: proj.coAssigneeNames || [],
       deadline: proj.deadline || '2026-12-31',
+      followupDate: proj.followupDate,
+      followupNote: proj.followupNote,
       deliverables: proj.deliverables || '',
-      progress: proj.progress || 10,
+      progress: proj.progress ?? 10,
       status: proj.status || 'In Progress',
     };
     setProjects((prev) => [newProj, ...prev]);
@@ -598,8 +796,50 @@ export default function App() {
     );
   };
 
-  // Add New Team Member (Onboard)
+  const handleUpdateProject = (updatedProj: StrategicProject) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === updatedProj.id ? updatedProj : p))
+    );
+    showToast(
+      language === 'my'
+        ? `စီမံကိန်း "${updatedProj.title}" ကို ပြင်ဆင်သိမ်းဆည်းပြီးပါပြီ။`
+        : `Project "${updatedProj.title}" updated.`
+    );
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    setTasks((prev) => prev.filter((t) => t.projectId !== projectId));
+    showToast(
+      language === 'my' ? 'စီမံကိန်းနှင့် ဆက်စပ် Task များကို ဖျက်ပြီးပါပြီ။' : 'Project deleted.'
+    );
+  };
+
+  const handleToggleAllowMemberDeadlineSetup = (enabled: boolean) => {
+    if (currentUser.roleTier !== 'ADMIN') return;
+    setAllowMemberDeadlineSetup(enabled);
+    showToast(
+      language === 'my'
+        ? enabled
+          ? 'အဖွဲ့ဝင်တိုင်း Strategic Project Deadline များ Setup ပြုလုပ်ခွင့်ကို Admin မှ ဖွင့်ပေးလိုက်ပါပြီ။'
+          : 'Strategic Project Deadline Setup ကို Admin သီးသန့်အဖြစ် ကန့်သတ်လိုက်ပါပြီ။'
+        : enabled
+        ? 'Admin enabled Deadline Setup for all team members.'
+        : 'Admin restricted Deadline Setup to Admins only.'
+    );
+  };
+
+  // Add New Team Member (Onboard - Admin Only)
   const handleAddUser = (userData: Partial<UserProfile>) => {
+    if (currentUser.roleTier !== 'ADMIN') {
+      showToast(
+        language === 'my'
+          ? 'Admin များသာ ဝန်ထမ်းအသစ် ထည့်သွင်းခွင့်ရှိပါသည်။'
+          : 'Only Admins are permitted to add team members.'
+      );
+      return;
+    }
+
     const newUser: UserProfile = {
       id: `u-${Date.now()}`,
       name: userData.name || 'New Member',
@@ -622,8 +862,17 @@ export default function App() {
     );
   };
 
-  // Update Member Status (Onboard / Offboard / Resign)
+  // Update Member Status (Onboard / Offboard / Resign - Admin Only)
   const handleUpdateMemberStatus = (userId: string, newStatus: MemberStatus) => {
+    if (currentUser.roleTier !== 'ADMIN') {
+      showToast(
+        language === 'my'
+          ? 'Admin များသာ ဝန်ထမ်းအဝင်/အထွက် အခြေအနေ ပြောင်းလဲခွင့်ရှိပါသည်။'
+          : 'Only Admins can change staff onboarding/offboarding status.'
+      );
+      return;
+    }
+
     setUsers((prev) =>
       prev.map((u) => {
         if (u.id === userId) {
@@ -661,8 +910,17 @@ export default function App() {
     );
   };
 
-  // Permanently Delete Team Member (Admin)
+  // Permanently Delete Team Member (Admin Only)
   const handleDeleteUser = (userId: string) => {
+    if (currentUser.roleTier !== 'ADMIN') {
+      showToast(
+        language === 'my'
+          ? 'Admin များသာ ဝန်ထမ်းဖယ်ရှားခွင့်ရှိပါသည်။'
+          : 'Only Admins can remove team members.'
+      );
+      return;
+    }
+
     if (currentUser.id === userId) {
       showToast(
         language === 'my'
@@ -732,6 +990,12 @@ export default function App() {
         onOpenEditProfile={() => handleOpenEditProfile(currentUser)}
         onOpenOrgChart={() => setIsOrgChartModalOpen(true)}
         onResetData={handleResetData}
+        onOpenChangeAdminPassword={() => {
+          setPendingAdminUser(null);
+          setAdminPwdMode('change');
+          setAdminPwdModalOpen(true);
+        }}
+        onLockAdmin={handleLockAdmin}
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         language={language}
@@ -760,6 +1024,8 @@ export default function App() {
             tasks={tasks}
             leaves={leaves}
             trainingLogs={trainingLogs}
+            attendanceOverrides={attendanceOverrides}
+            onNotify={showToast}
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenEditProfile={handleOpenEditProfile}
             onOpenAddTask={handleOpenAddTask}
@@ -843,6 +1109,9 @@ export default function App() {
         {currentTab === 'weekly' && (
           <WeeklyBoardTab
             tasks={tasks}
+            leaves={leaves}
+            trainingLogs={trainingLogs}
+            attendanceOverrides={attendanceOverrides}
             currentUser={currentUser}
             allUsers={users}
             onOpenAddTask={handleOpenAddTask}
@@ -851,6 +1120,14 @@ export default function App() {
               setIsTaskModalOpen(true);
             }}
             onDeleteTask={handleDeleteTask}
+            onOpenAddLeave={handleOpenAddLeave}
+            onOpenEditLeave={(leave) => {
+              setLeaveToEdit(leave);
+              setIsLeaveModalOpen(true);
+            }}
+            onApproveLeave={handleApproveLeave}
+            onDeleteLeave={handleDeleteLeave}
+            onSetAttendanceOverride={handleSetAttendanceOverride}
             onOpenMemberSheet={(member) => setSheetMember(member)}
             onOpenComments={(task) => {
               setSelectedCommentTask(task);
@@ -863,9 +1140,21 @@ export default function App() {
         {currentTab === 'projects' && (
           <ProjectsTab
             projects={projects}
+            tasks={tasks}
             currentUser={currentUser}
             allUsers={users}
+            allowMemberDeadlineSetup={allowMemberDeadlineSetup}
+            onToggleAllowMemberDeadlineSetup={handleToggleAllowMemberDeadlineSetup}
             onAddProject={handleAddProject}
+            onUpdateProject={handleUpdateProject}
+            onDeleteProject={handleDeleteProject}
+            onSaveTask={handleSaveTask}
+            onDeleteTask={handleDeleteTask}
+            onOpenComments={(task) => {
+              setSelectedCommentTask(task);
+              setIsCommentsModalOpen(true);
+            }}
+            onOpenMemberSheet={(member) => setSheetMember(member)}
             language={language}
           />
         )}
@@ -907,7 +1196,7 @@ export default function App() {
         language={language}
       />
 
-      {/* 2. Interactive Member Sheet Drawer / Modal */}
+      {/* 2. Interactive 3D Member Sheet Drawer / Modal */}
       <MemberSheetModal
         isOpen={!!sheetMember}
         onClose={() => setSheetMember(null)}
@@ -916,8 +1205,17 @@ export default function App() {
         tasks={tasks}
         leaves={leaves}
         trainingLogs={trainingLogs}
-        onOpenAddTask={(member) => {
-          handleOpenAddTask(member);
+        attendanceOverrides={attendanceOverrides}
+        onSetAttendanceOverride={handleSetAttendanceOverride}
+        onExportExcelSuccess={(filename) =>
+          showToast(
+            language === 'my'
+              ? `Excel ဖိုင် "${filename}" ကို ဒေါင်းလုဒ်ဆွဲပြီးပါပြီ။`
+              : `Exported ${filename}`
+          )
+        }
+        onOpenAddTask={(member, defaultDate) => {
+          handleOpenAddTask(member, defaultDate);
         }}
         onOpenEditTask={(task) => {
           setTaskToEdit(task);
@@ -928,8 +1226,8 @@ export default function App() {
           setSelectedCommentTask(task);
           setIsCommentsModalOpen(true);
         }}
-        onOpenAddLeave={(member) => {
-          handleOpenAddLeave(member);
+        onOpenAddLeave={(member, defaultDate) => {
+          handleOpenAddLeave(member, defaultDate);
         }}
         onOpenEditLeave={(leave) => {
           setLeaveToEdit(leave);
@@ -937,8 +1235,8 @@ export default function App() {
         }}
         onDeleteLeave={handleDeleteLeave}
         onApproveLeave={handleApproveLeave}
-        onOpenAddTraining={(member) => {
-          handleOpenAddTraining(member);
+        onOpenAddTraining={(member, defaultDate) => {
+          handleOpenAddTraining(member, defaultDate);
         }}
         onOpenEditTraining={(training) => {
           setTrainingToEdit(training);
@@ -959,9 +1257,11 @@ export default function App() {
           setIsTaskModalOpen(false);
           setTaskToEdit(null);
           setActionTargetMember(null);
+          setActionDefaultDate(undefined);
         }}
         taskToEdit={taskToEdit}
         targetMember={actionTargetMember}
+        defaultDate={actionDefaultDate}
         currentUser={currentUser}
         allUsers={users}
         onSaveTask={handleSaveTask}
@@ -991,9 +1291,11 @@ export default function App() {
           setIsLeaveModalOpen(false);
           setLeaveToEdit(null);
           setActionTargetMember(null);
+          setActionDefaultDate(undefined);
         }}
         leaveToEdit={leaveToEdit}
         targetMember={actionTargetMember}
+        defaultDate={actionDefaultDate}
         currentUser={currentUser}
         allUsers={users}
         onSaveLeave={handleSaveLeave}
@@ -1007,9 +1309,11 @@ export default function App() {
           setIsTrainingModalOpen(false);
           setTrainingToEdit(null);
           setActionTargetMember(null);
+          setActionDefaultDate(undefined);
         }}
         trainingToEdit={trainingToEdit}
         targetMember={actionTargetMember}
+        defaultDate={actionDefaultDate}
         currentUser={currentUser}
         allUsers={users}
         onSaveTraining={handleSaveTraining}
@@ -1027,11 +1331,49 @@ export default function App() {
       <UserManagementModal
         isOpen={isAddUserModalOpen}
         onClose={() => setIsAddUserModalOpen(false)}
+        currentUser={currentUser}
         allUsers={users}
         onAddUser={handleAddUser}
         onUpdateUserStatus={handleUpdateMemberStatus}
         onDeleteUser={handleDeleteUser}
         onOpenEditProfile={handleOpenEditProfile}
+        onOpenChangeAdminPassword={() => {
+          setPendingAdminUser(null);
+          setAdminPwdMode('change');
+          setAdminPwdModalOpen(true);
+        }}
+        language={language}
+      />
+
+      {/* 9. Reset Demo Data Confirmation Modal */}
+      <ConfirmModal
+        isOpen={isResetConfirmOpen}
+        onClose={() => setIsResetConfirmOpen(false)}
+        onConfirm={confirmResetData}
+        title={language === 'my' ? 'မူလဒေတာ ပြန်ထားရန် အတည်ပြုပါ' : 'Confirm Portal Reset'}
+        message={
+          language === 'my'
+            ? 'ဒေတာအားလုံးကို မူလနမူနာ အခြေအနေသို့ ပြန်လည်ထားရှိရန် သေချာပါသလား?'
+            : 'Reset all portal data back to original demo values?'
+        }
+        confirmLabel={language === 'my' ? 'ပြန်လည်ထားရှိမည်' : 'Reset Data'}
+        cancelLabel={language === 'my' ? 'မလုပ်တော့ပါ' : 'Cancel'}
+        isDestructive={false}
+        language={language}
+      />
+
+      {/* 10. Admin Password Verification & Change Modal */}
+      <AdminPasswordModal
+        isOpen={adminPwdModalOpen}
+        mode={adminPwdMode}
+        targetAdminName={pendingAdminUser?.name}
+        currentPasswordStored={adminPassword}
+        onVerifySuccess={handleAdminUnlockSuccess}
+        onChangePassword={handleChangeAdminPassword}
+        onClose={() => {
+          setAdminPwdModalOpen(false);
+          setPendingAdminUser(null);
+        }}
         language={language}
       />
     </div>
