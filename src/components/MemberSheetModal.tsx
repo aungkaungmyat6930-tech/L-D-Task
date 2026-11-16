@@ -3,6 +3,7 @@ import {
   UserProfile,
   TaskItem,
   LeaveRequest,
+  LeaveAttachment,
   TrainingLog,
   MemberStatus,
   AttendanceRecord,
@@ -25,7 +26,18 @@ import {
   computeMemberMonthlyAttendance,
   ComputedDayStatus,
   DailyAttendanceRow,
+  getShortLeaveTypeLabel,
 } from '../utils/attendanceHelpers';
+import {
+  isTaskOverdue,
+  isTaskNearDeadline,
+  formatDeadlineNotiLabel,
+} from '../utils/taskHelpers';
+import {
+  formatBreakDuration,
+  getTrainerEntriesForLog,
+  getMemberHoursForTrainingLog,
+} from '../utils/trainingHelpers';
 import { exportMemberMonthlyExcel } from '../utils/excelExport';
 import {
   isAdminOrSuper,
@@ -54,10 +66,13 @@ import {
   Building2,
   FileSpreadsheet,
   BellRing,
+  Bell,
+  FileText,
   CheckCircle2,
   RotateCcw
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { AttachmentPreviewModal } from './AttachmentPreviewModal';
 
 interface MemberSheetModalProps {
   isOpen: boolean;
@@ -136,10 +151,28 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     isDestructive?: boolean;
     onConfirm: () => void;
   } | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<LeaveAttachment | null>(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setSelectedMonth(new Date().toISOString().slice(0, 7));
+    if (isOpen && member) {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const mTasks = tasks.filter(
+        (item) =>
+          item.ownerId === member.id ||
+          item.ownerName === member.name ||
+          item.coAssigneeIds?.includes(member.id) ||
+          item.coAssigneeNames?.includes(member.name)
+      );
+      const hasTasksInCurrentMonth = mTasks.some((tk) => getMonthKey(tk.due) === currentMonth);
+      if (!hasTasksInCurrentMonth && mTasks.length > 0) {
+        const latestMonth = mTasks
+          .map((tk) => getMonthKey(tk.due))
+          .sort()
+          .reverse()[0];
+        setSelectedMonth(latestMonth || currentMonth);
+      } else {
+        setSelectedMonth(currentMonth);
+      }
       setSelectedWeek('all');
       setViewAllMonths(false);
     }
@@ -178,16 +211,13 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   );
 
   const totalTrainingHours = memberTraining.reduce(
-    (acc, tr) => acc + (tr.calculatedHours || 0),
+    (acc, tr) => acc + getMemberHoursForTrainingLog(tr, member),
     0
   );
   const totalLeaveDays = memberLeaves.reduce((acc, l) => acc + (l.duration || 0), 0);
   const todayStr = new Date().toISOString().split('T')[0];
-  const overdueTaskCount = memberTasks.filter(
-    (item) =>
-      item.status === 'Overdue' ||
-      (item.status !== 'Completed' && item.status !== 'Cancelled' && item.due < todayStr)
-  ).length;
+  const overdueTaskCount = memberTasks.filter((item) => isTaskOverdue(item, todayStr)).length;
+  const dueSoonTaskCount = memberTasks.filter((item) => isTaskNearDeadline(item, todayStr)).length;
   const activeTaskCount = memberTasks.filter(
     (item) =>
       item.status === 'Active' ||
@@ -278,7 +308,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
   // Render Task card row
   const renderTaskCard = (task: TaskItem) => {
-    const isOverdue = task.status === 'Overdue';
+    const isOverdue = isTaskOverdue(task, todayStr);
+    const nearLabel = formatDeadlineNotiLabel(task, todayStr, language);
     const isPending = task.status === 'Pending' || task.status === 'Waiting';
     const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
     const canEditTask = (isMyTask || hasSheetControl) && !isViewer;
@@ -310,6 +341,12 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             >
               {displayStatus}
             </span>
+            {nearLabel && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
+                <Bell className="w-3 h-3 text-amber-700" />
+                <span>{nearLabel}</span>
+              </span>
+            )}
             {task.completionRequested && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
                 <Clock className="w-3 h-3" />
@@ -330,8 +367,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
-            <span className={isOverdue ? 'text-red-600 font-bold' : ''}>
-              Due: {task.due}
+            <span className={isOverdue ? 'text-red-600 font-bold' : nearLabel ? 'text-amber-800 font-bold' : ''}>
+              Deadline: {task.due}
             </span>
             <span aria-hidden="true">·</span>
             <span>Follow-up: {task.followup}</span>
@@ -462,6 +499,30 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             <span aria-hidden="true">·</span>
             <span className="text-slate-600 truncate max-w-sm">{leave.reason}</span>
           </div>
+          {leave.attachments && leave.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {leave.attachments.map((att) => (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => setPreviewAttachment(att)}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-300 text-[10px] font-semibold transition"
+                  title={att.name}
+                >
+                  {att.mimeType.startsWith('image/') ? (
+                    <img
+                      src={att.dataUrl}
+                      alt={att.name}
+                      className="w-3.5 h-3.5 rounded-xs object-cover shrink-0"
+                    />
+                  ) : (
+                    <FileText className="w-3 h-3 text-red-600 shrink-0" />
+                  )}
+                  <span className="truncate max-w-[90px]">{att.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
           {(leave.adminNote || leave.approvedBy) && (
             <div className="text-[10px] text-purple-700 font-medium">
               {leave.approvedBy ? `Reviewed by ${leave.approvedBy}` : ''}
@@ -543,6 +604,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   // Render Training Topic card row
   const renderTrainingCard = (tr: TrainingLog) => {
     const canEditTraining = (isMe || isAdmin) && !isViewer;
+    const myHours = getMemberHoursForTrainingLog(tr, member);
+    const trainerEntries = getTrainerEntriesForLog(tr);
 
     return (
       <div
@@ -553,7 +616,10 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-slate-900">{tr.name}</span>
             <span className="text-xs font-extrabold text-purple-700 tabular-nums">
-              {tr.calculatedHours.toFixed(1)} hrs
+              {myHours.toFixed(1)} hrs ({member.name})
+            </span>
+            <span className="text-[10px] font-semibold text-slate-500 tabular-nums">
+              · Session {tr.calculatedHours.toFixed(1)}h
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
@@ -561,25 +627,39 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               <GraduationCap className="w-3.5 h-3.5 text-purple-600" />
               Trainer: {tr.trainerName || '-'}
             </span>
-            {tr.coTrainerNames && tr.coTrainerNames.length > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="font-semibold text-indigo-700">
-                  Co-Trainer: {tr.coTrainerNames.join(', ')}
-                </span>
-              </>
-            )}
             <span aria-hidden="true">·</span>
             <span>{tr.date}</span>
             <span aria-hidden="true">·</span>
             <span>
-              {tr.start} ~ {tr.end} (Break {tr.breakHrs}h)
+              {tr.start} ~ {tr.end} (Break {formatBreakDuration(tr.breakHrs)})
             </span>
             <span aria-hidden="true">·</span>
             <span className="font-semibold text-slate-600">
               {getWeekOrdinal(getWeekOfMonth(tr.date))}
             </span>
           </div>
+          {trainerEntries.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              {trainerEntries.map((entry, idx) => (
+                <span
+                  key={idx}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border tabular-nums ${
+                    entry.userId === member.id || entry.name === member.name
+                      ? 'bg-purple-100 text-purple-900 border-purple-300'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <span>{entry.name}</span>
+                  {entry.topic && (
+                    <span className="px-1 rounded bg-white/90 text-indigo-800 border border-indigo-200">
+                      {entry.topic}
+                    </span>
+                  )}
+                  <span>· {formatBreakDuration(entry.hours)}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {tr.editedBy && (
             <div className="text-[10px] font-bold text-amber-700">
               {language === 'my' ? 'ပြင်ဆင်သူ:' : 'Edited by:'} {tr.editedBy}
@@ -629,22 +709,17 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     switch (status) {
       case 'Office':
         return {
-          label: language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present',
+          label: language === 'my' ? 'ရုံးတက် (Office)' : 'Office',
           cls: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
         };
-      case 'LeaveApproved':
+      case 'Leave':
         return {
-          label: language === 'my' ? 'ခွင့် (အတည်ပြု)' : 'On Leave',
+          label: language === 'my' ? 'ခွင့် (Leave)' : 'Leave',
           cls: 'bg-teal-100 text-teal-800 border border-teal-200',
         };
-      case 'LeavePending':
+      case 'Unmarked':
         return {
-          label: language === 'my' ? 'ခွင့် (စောင့်ဆိုင်း)' : 'Leave Pending',
-          cls: 'bg-amber-100 text-amber-800 border border-amber-200',
-        };
-      case 'Weekend':
-        return {
-          label: language === 'my' ? 'စနေ/တနင်္ဂနွေ' : 'Weekend',
+          label: '-',
           cls: 'bg-slate-100 text-slate-500 border border-slate-200',
         };
     }
@@ -652,16 +727,18 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
   const renderAttendanceRow = (row: DailyAttendanceRow) => {
     const badge = getAttendanceBadge(row.status);
-    const selectVal = row.overrideStatus || 'AUTO';
+    const selectVal = row.overrideStatus || (row.status === 'Leave' ? 'Leave' : 'AUTO');
+    const isApprovedLeaveLockedForMember =
+      row.status === 'Leave' && Boolean(row.leave) && !isAdmin;
 
     return (
       <div
         key={row.date}
         className={`rounded-lg border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
-          row.isWeekend && !row.overrideStatus && row.status === 'Weekend'
-            ? 'bg-slate-50/80 border-slate-200/70 text-slate-500'
-            : row.status === 'LeaveApproved'
+          row.status === 'Leave'
             ? 'bg-teal-50/40 border-teal-200/80'
+            : row.status === 'Office'
+            ? 'bg-emerald-50/20 border-emerald-200/80'
             : 'bg-white border-slate-200/90'
         }`}
       >
@@ -673,16 +750,26 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${badge.cls}`}>
             {badge.label}
           </span>
-          {row.overrideStatus && (
-            <span className="text-[10px] font-bold text-indigo-700">
-              · {language === 'my' ? 'Manual ပြင်ထား' : 'Override'}
+          {row.leave && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-100/80 text-teal-900 border border-teal-200 text-[10px] font-bold tabular-nums">
+              {getShortLeaveTypeLabel(row.leave.type, language)} · {row.leave.duration}d ({row.leave.start.slice(5)}~{row.leave.end.slice(5)})
+              {row.leave.hrRefId ? ` · ${row.leave.hrRefId}` : ''}
             </span>
           )}
-          {row.leave && (
-            <span className="text-[11px] text-teal-800 font-semibold truncate max-w-xs">
-              · {row.leave.type}
-              {row.leave.hrRefId ? ` (${row.leave.hrRefId})` : ''}
-            </span>
+          {row.leave?.attachments && row.leave.attachments.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {row.leave.attachments.map((att) => (
+                <button
+                  key={att.id}
+                  type="button"
+                  onClick={() => setPreviewAttachment(att)}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white hover:bg-teal-50 text-slate-700 border border-slate-200 text-[10px] font-semibold"
+                >
+                  <FileText className="w-3 h-3 text-teal-700" />
+                  <span className="truncate max-w-[70px]">{att.name}</span>
+                </button>
+              ))}
+            </div>
           )}
           {row.tasksDueCount > 0 && (
             <span className="text-[11px] text-blue-700 font-semibold tabular-nums">
@@ -691,12 +778,13 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           )}
         </div>
 
-        {hasSheetControl && (
+        {!isViewer && !isApprovedLeaveLockedForMember && (
           <div className="flex items-center gap-1.5 shrink-0">
             <select
               value={selectVal}
               onChange={(e) => {
                 const val = e.target.value;
+                if (!isAdmin && val !== 'Office') return;
                 onSetAttendanceOverride(
                   member.id,
                   row.date,
@@ -704,23 +792,26 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                 );
               }}
               className="text-[11px] font-semibold bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              title={language === 'my' ? 'တက်ရောက်မှု အခြေအနေ ပြောင်းရန်' : 'Set daily attendance status'}
+              title={
+                isAdmin
+                  ? language === 'my'
+                    ? 'Office သို့မဟုတ် Leave ရွေးချယ်ရန်'
+                    : 'Set Office or Leave'
+                  : language === 'my'
+                  ? 'ရုံးတက် (Office) ရွေးချယ်ရန်'
+                  : 'Select Office'
+              }
             >
-              <option value="AUTO">{language === 'my' ? 'Auto (စနစ်အတိုင်း)' : 'Auto'}</option>
-              <option value="Office">{language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}</option>
-              <option value="Leave">{language === 'my' ? 'ခွင့် (Leave)' : 'Leave'}</option>
+              {isAdmin ? (
+                <option value="AUTO">{row.leave ? 'Leave (Approved)' : '-'}</option>
+              ) : (
+                <option value="AUTO" disabled>
+                  {language === 'my' ? 'Office ရွေးရန်' : 'Select Office'}
+                </option>
+              )}
+              <option value="Office">Office</option>
+              {isAdmin && <option value="Leave">Leave</option>}
             </select>
-
-            {!row.leave && (
-              <button
-                type="button"
-                onClick={() => onOpenAddLeave(member, row.date)}
-                className="px-2 py-1 text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition"
-                title={language === 'my' ? 'ဤရက်အတွက် ခွင့်တင်ရန်' : 'Add leave for this date'}
-              >
-                + Leave
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -732,6 +823,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     if (activeSubtab === 'attendance') {
       const weeksToRender: WeekNumber[] =
         selectedWeek === 'all' ? weeksInMonth : [selectedWeek];
+      const approvedLeavesInMonth = memberLeaves.filter(
+        (l) =>
+          l.status === 'Approved' &&
+          (l.start.startsWith(selectedMonth) || l.end.startsWith(selectedMonth))
+      );
 
       return (
         <div className="space-y-4">
@@ -746,22 +842,51 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                 </h4>
                 <p className="text-[11px] text-slate-500">
                   {language === 'my'
-                    ? 'ရုံးတက် (Office) နှင့် ခွင့်ရက် (Leave) များကို အလိုအလျောက် တွက်ချက်ပြသထားပါသည်။'
-                    : 'Automatically calculated from Office days and approved/pending Leave records.'}
+                    ? 'ရုံးတက် (Office) ကို မည်သူမဆို ထည့်သွင်းနိုင်ပြီး Approved ခွင့်ရက်များတွင် ခွင့်အမျိုးအစားနှင့် ရက်များကို ပြသပေးပါသည်။'
+                    : 'Anyone can mark Office attendance; Approved leaves display leave type & exact dates.'}
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={handleExportMemberExcel}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>{language === 'my' ? 'Excel ထုတ်မည် (.xlsx)' : 'Export Excel (.xlsx)'}</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {!isViewer && (
+                  <button
+                    type="button"
+                    onClick={() => onSetAttendanceOverride(member.id, todayStr, 'Office')}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-emerald-900 bg-emerald-100 hover:bg-emerald-200 border border-emerald-300 rounded-lg shadow-2xs transition"
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>{language === 'my' ? 'ယနေ့ Office ထည့်မည်' : '+ Mark Today Office'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleExportMemberExcel}
+                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs transition"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>{language === 'my' ? 'Excel ထုတ်မည် (.xlsx)' : 'Export Excel (.xlsx)'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+            {approvedLeavesInMonth.length > 0 && (
+              <div className="bg-teal-50/70 border border-teal-200 rounded-lg p-2.5 flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="font-bold text-teal-900">
+                  {language === 'my' ? 'Approved ခွင့်မှတ်တမ်း:' : 'Approved Leaves:'}
+                </span>
+                {approvedLeavesInMonth.map((lv) => (
+                  <span
+                    key={lv.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-teal-300 text-teal-900 font-bold tabular-nums"
+                  >
+                    {lv.type} · {lv.duration}d ({lv.start} ~ {lv.end})
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-center">
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-slate-500 block">
                   {language === 'my' ? 'အလုပ်တက်ရက်စုစုပေါင်း' : 'Working Days'}
@@ -772,7 +897,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               </div>
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-emerald-700 block">
-                  {language === 'my' ? 'ရုံးတက် (Office)' : 'Office Present'}
+                  {language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}
                 </span>
                 <span className="text-lg font-black text-emerald-900 tabular-nums">
                   {monthlyAttendance.officePresentDays}
@@ -780,18 +905,10 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               </div>
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-2.5">
                 <span className="text-[10px] font-bold text-teal-700 block">
-                  {language === 'my' ? 'အတည်ပြု ခွင့် (Leave)' : 'Approved Leave'}
+                  {language === 'my' ? 'ခွင့် (Leave — Approved)' : 'Leave (Approved)'}
                 </span>
                 <span className="text-lg font-black text-teal-900 tabular-nums">
                   {monthlyAttendance.approvedLeaveDaysInMonth}
-                </span>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                <span className="text-[10px] font-bold text-amber-700 block">
-                  {language === 'my' ? 'စောင့်ဆိုင်း ခွင့်' : 'Pending Leave'}
-                </span>
-                <span className="text-lg font-black text-amber-900 tabular-nums">
-                  {monthlyAttendance.pendingLeaveDaysInMonth}
                 </span>
               </div>
             </div>
@@ -800,9 +917,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
           {weeksToRender.map((wk) => {
             const wkRows = monthlyAttendance.dailyRows.filter((r) => r.week === wk);
             const wkPresent = wkRows.filter((r) => r.status === 'Office').length;
-            const wkLeave = wkRows.filter(
-              (r) => r.status === 'LeaveApproved' || r.status === 'LeavePending'
-            ).length;
+            const wkLeave = wkRows.filter((r) => r.status === 'Leave').length;
 
             return (
               <div
@@ -953,6 +1068,31 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   </div>
                 ) : (
                   <>
+                    {activeSubtab === 'tasks' && selectedWeek !== 'all' && wkTasks.length > 0 && (
+                      <div className="bg-blue-50/70 border border-blue-200 rounded-lg overflow-hidden mb-1">
+                        <div className="px-3 py-1.5 bg-blue-100/70 border-b border-blue-200 text-[11px] font-extrabold text-blue-950 flex items-center justify-between">
+                          <span>
+                            {language === 'my'
+                              ? `${getWeekOrdinal(wk)} Task များ (Title နှင့် Deadline စာရင်း)`
+                              : `${getWeekOrdinal(wk)} Tasks — Title & Deadline Overview`}
+                          </span>
+                          <span className="tabular-nums">{wkTasks.length} tasks</span>
+                        </div>
+                        <div className="divide-y divide-blue-100">
+                          {wkTasks.map((tk) => (
+                            <div
+                              key={`summary-${tk.id}`}
+                              className="px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] bg-white/80"
+                            >
+                              <span className="font-bold text-slate-900 truncate">{tk.title}</span>
+                              <span className="font-bold text-blue-800 tabular-nums shrink-0">
+                                Deadline: {tk.due}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {activeSubtab === 'tasks' && wkTasks.map(renderTaskCard)}
                     {activeSubtab === 'leaves' && wkLeaves.map(renderLeaveCard)}
                     {activeSubtab === 'training' && wkTraining.map(renderTrainingCard)}
@@ -1038,6 +1178,23 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
                       <BellRing className="w-3 h-3" />
                       <span>{overdueTaskCount} Overdue</span>
+                    </button>
+                  )}
+                  {dueSoonTaskCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveSubtab('tasks')}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-extrabold shadow-sm transition tabular-nums"
+                      title={
+                        language === 'my'
+                          ? `${member.name} တွင် Deadline နီးနေသော Task ${dueSoonTaskCount} ခု ရှိပါသည်`
+                          : `${member.name} has ${dueSoonTaskCount} task(s) nearing deadline`
+                      }
+                    >
+                      <Bell className="w-3 h-3" />
+                      <span>
+                        {dueSoonTaskCount} {language === 'my' ? 'Deadline နီး' : 'Due Soon'}
+                      </span>
                     </button>
                   )}
                   <span className="text-[11px] font-bold text-amber-300">
@@ -1461,6 +1618,10 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
               {weeksInMonth.map((wk) => {
                 const wkCount = getRecordCountForWeek(wk);
+                const wkPreviewTasks =
+                  activeSubtab === 'tasks'
+                    ? monthTasks.filter((item) => getWeekOfMonth(item.due) === wk).slice(0, 2)
+                    : [];
                 const { startDay, endDay } = getWeekDayRange(selectedMonth, wk);
                 const isSelected = selectedWeek === wk;
                 const activeBoxCls =
@@ -1476,8 +1637,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   <button
                     key={wk}
                     type="button"
-                    onClick={() => setSelectedWeek(wk)}
-                    className={`cube-3d-tile p-3 rounded-lg text-left border-2 transition flex flex-col justify-between min-h-[72px] ${
+                    onClick={() => {
+                      setViewAllMonths(false);
+                      setSelectedWeek(wk);
+                    }}
+                    className={`cube-3d-tile p-3 rounded-lg text-left border-2 transition flex flex-col justify-between min-h-[78px] ${
                       isSelected
                         ? activeBoxCls
                         : 'bg-white text-slate-800 border-slate-300 hover:border-blue-400'
@@ -1497,8 +1661,22 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                         {wkCount}
                       </span>
                     </div>
+                    {wkPreviewTasks.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {wkPreviewTasks.map((tk) => (
+                          <div
+                            key={tk.id}
+                            className={`text-[9px] truncate font-semibold tabular-nums ${
+                              isSelected ? 'text-white/95' : 'text-slate-700'
+                            }`}
+                          >
+                            • {tk.title} ({tk.due.slice(5)})
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <span
-                      className={`text-[10px] font-semibold tabular-nums mt-1.5 ${
+                      className={`text-[10px] font-semibold tabular-nums mt-1 ${
                         isSelected ? 'text-white/85' : 'text-slate-500'
                       }`}
                     >
@@ -1529,6 +1707,12 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         message={pendingConfirm?.message}
         confirmLabel={pendingConfirm?.confirmLabel}
         isDestructive={pendingConfirm?.isDestructive ?? true}
+        language={language}
+      />
+
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
         language={language}
       />
     </div>

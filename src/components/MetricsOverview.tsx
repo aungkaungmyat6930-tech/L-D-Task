@@ -1,15 +1,16 @@
 import React from 'react';
 import { Language, TRANSLATIONS } from '../utils/translations';
-import { CheckSquare, AlertTriangle, CalendarDays, Clock } from 'lucide-react';
+import { CheckSquare, AlertTriangle, CalendarDays, Clock, Bell } from 'lucide-react';
 
 interface MetricsOverviewProps {
   activeTasksCount: number;
   overdueTasksCount: number;
+  dueSoonTasksCount: number;
   pendingLeavesCount: number;
   totalTrainingHours: number;
   onSelectMetric: (
     tab: 'tasks' | 'leave' | 'training',
-    filter?: 'active' | 'overdue' | 'pending'
+    filter?: 'active' | 'overdue' | 'due-soon' | 'pending'
   ) => void;
   language: Language;
 }
@@ -17,6 +18,7 @@ interface MetricsOverviewProps {
 export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
   activeTasksCount,
   overdueTasksCount,
+  dueSoonTasksCount,
   pendingLeavesCount,
   totalTrainingHours,
   onSelectMetric,
@@ -25,7 +27,7 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
   const t = TRANSLATIONS[language];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {/* Active Tasks */}
       <div
         onClick={() => onSelectMetric('tasks', 'active')}
@@ -56,9 +58,9 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
             : 'bg-white border-slate-200'
         }`}
       >
-        <div>
-          <p className="text-[11px] text-red-700 font-bold uppercase tracking-wider flex items-center gap-1">
-            {t.metricOverdue}
+        <div className="min-w-0">
+          <p className="text-[11px] text-red-700 font-bold uppercase tracking-wider flex items-center gap-1 flex-wrap">
+            <span>{t.metricOverdue}</span>
             {overdueTasksCount > 0 && (
               <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
             )}
@@ -72,6 +74,34 @@ export const MetricsOverview: React.FC<MetricsOverviewProps> = ({
         </div>
         <div className="w-11 h-11 rounded-xl bg-red-100 text-red-600 flex items-center justify-center text-xl shrink-0">
           <AlertTriangle className="w-5 h-5" />
+        </div>
+      </div>
+
+      {/* Due Soon Tasks (Separated like Overdue Tasks) */}
+      <div
+        onClick={() => onSelectMetric('tasks', 'due-soon')}
+        className={`p-4 rounded-xl border shadow-sm hover:shadow-md cursor-pointer transition-all flex items-center justify-between group ${
+          dueSoonTasksCount > 0
+            ? 'bg-amber-50/60 border-amber-300 ring-1 ring-amber-400/30'
+            : 'bg-white border-slate-200'
+        }`}
+      >
+        <div className="min-w-0">
+          <p className="text-[11px] text-amber-800 font-bold uppercase tracking-wider flex items-center gap-1 flex-wrap">
+            <span>{language === 'my' ? 'Due Soon (Deadline နီး)' : 'Due Soon Tasks'}</span>
+            {dueSoonTasksCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </p>
+          <h3 className="text-2xl font-black text-amber-700 mt-0.5 tabular-nums">
+            {dueSoonTasksCount}
+          </h3>
+          <span className="text-[10px] text-amber-700 font-semibold group-hover:underline">
+            {language === 'my' ? 'Deadline နီး Task ကြည့်ရန် →' : 'Filter near-deadline tasks →'}
+          </span>
+        </div>
+        <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl shrink-0">
+          <Bell className="w-5 h-5" />
         </div>
       </div>
 

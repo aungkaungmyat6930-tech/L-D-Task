@@ -53,11 +53,21 @@ export type LeaveType =
   | 'Casual Leave'
   | 'Earned Leave'
   | 'Medical Leave'
+  | 'Replacement Leave'
   | 'Training/Exam Leave'
   | 'Maternity/Paternity Leave'
   | 'Unpaid Leave'
   | 'Compassionate Leave';
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
+
+export interface LeaveAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  kind: 'image' | 'pdf';
+  dataUrl: string;
+  sizeBytes?: number;
+}
 
 export interface LeaveRequest {
   id: string;
@@ -68,6 +78,7 @@ export interface LeaveRequest {
   end: string;
   duration: number; // in days
   reason: string;
+  attachments?: LeaveAttachment[];
   status: LeaveStatus;
   approvedBy?: string;
   approvedAt?: string;
@@ -75,6 +86,16 @@ export interface LeaveRequest {
   hrRefId?: string;
   hrSynced?: boolean;
   createdAt: string;
+}
+
+export interface TrainerHourEntry {
+  userId?: string;
+  name: string;
+  role: 'Lead Trainer' | 'Co-Trainer';
+  topic?: string;
+  startTime?: string;
+  endTime?: string;
+  hours: number;
 }
 
 export interface TrainingLog {
@@ -88,6 +109,7 @@ export interface TrainingLog {
   trainerName?: string;
   coTrainerNames?: string[];
   coTrainerIds?: string[];
+  trainerHours?: TrainerHourEntry[];
   attendeeNames: string[];
   attendeeIds: string[];
   location?: string;
@@ -110,6 +132,13 @@ export interface StrategicProject {
   followupNote?: string;
   deliverables: string;
   status: 'In Progress' | 'On Track' | 'Final Review' | 'Completed';
+  completionRequested?: boolean;
+  completionRequestedBy?: string;
+  completionRequestedAt?: string;
+  completionApprovedBy?: string;
+  completionApprovedAt?: string;
+  completionStatus?: 'Pending' | 'Approved' | 'Rejected';
+  comments?: TaskComment[];
 }
 
 export type AttendanceOverrideStatus = 'Office' | 'Leave';
@@ -120,6 +149,19 @@ export interface AttendanceRecord {
   date: string; // YYYY-MM-DD
   status: AttendanceOverrideStatus;
   note?: string;
+}
+
+export type FontScaleOption = 'sm' | 'md' | 'lg' | 'xl';
+
+export interface AppearanceSettings {
+  fontScale: FontScaleOption;
+  customFontSizePx?: number;
+  textColor: string;
+  themeColor?: string;
+  accentColor?: string;
+  logoType?: 'badge' | 'image';
+  logoText?: string;
+  logoImageDataUrl?: string;
 }
 
 export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects';

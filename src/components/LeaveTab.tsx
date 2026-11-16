@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   LeaveRequest,
+  LeaveAttachment,
   UserProfile,
   TaskItem,
   TrainingLog,
@@ -14,9 +15,11 @@ import {
   Plus, 
   Edit3, 
   Trash2, 
-  Search
+  Search,
+  FileText
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { AttachmentPreviewModal } from './AttachmentPreviewModal';
 import { TrainingTeamAttendanceMatrix } from './TrainingTeamAttendanceMatrix';
 
 interface LeaveTabProps {
@@ -66,6 +69,7 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
   const [filter, setFilter] = useState<'all' | 'my' | 'pending' | 'approved' | 'rejected' | 'hr-unsynced'>('all');
   const [search, setSearch] = useState('');
   const [leaveToDelete, setLeaveToDelete] = useState<LeaveRequest | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<LeaveAttachment | null>(null);
 
   useEffect(() => {
     if (filterRequest) {
@@ -281,6 +285,30 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
 
                       <td className="py-3.5 px-4 text-slate-500 max-w-xs">
                         <span className="block truncate">{leave.reason}</span>
+                        {leave.attachments && leave.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {leave.attachments.map((att) => (
+                              <button
+                                key={att.id}
+                                type="button"
+                                onClick={() => setPreviewAttachment(att)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-300 text-[10px] font-semibold transition"
+                                title={att.name}
+                              >
+                                {att.mimeType.startsWith('image/') ? (
+                                  <img
+                                    src={att.dataUrl}
+                                    alt={att.name}
+                                    className="w-3.5 h-3.5 rounded-xs object-cover shrink-0"
+                                  />
+                                ) : (
+                                  <FileText className="w-3 h-3 text-red-600 shrink-0" />
+                                )}
+                                <span className="truncate max-w-[90px]">{att.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {leave.adminNote && (
                           <span className="block text-[10px] text-purple-700 font-medium mt-0.5 truncate">
                             HR Note: {leave.adminNote}
@@ -405,6 +433,11 @@ export const LeaveTab: React.FC<LeaveTabProps> = ({
         }
         confirmLabel={language === 'my' ? 'ဖျက်မည်' : 'Delete Leave'}
         cancelLabel={language === 'my' ? 'မဖျက်တော့ပါ' : 'Cancel'}
+        language={language}
+      />
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
         language={language}
       />
     </div>

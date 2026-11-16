@@ -9,6 +9,8 @@ import {
 } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { computeMemberMonthlyAttendance } from '../utils/attendanceHelpers';
+import { isTaskOverdue, isTaskNearDeadline } from '../utils/taskHelpers';
+import { getMemberHoursForTrainingLog } from '../utils/trainingHelpers';
 import { exportAllMembersMonthlyExcel } from '../utils/excelExport';
 import { isAdminOrSuper } from '../utils/roleHelpers';
 import { 
@@ -19,6 +21,7 @@ import {
   Plus,
   FileSpreadsheet,
   BellRing,
+  Bell,
   Crown
 } from 'lucide-react';
 
@@ -184,11 +187,8 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                 item.coAssigneeIds?.includes(user.id) ||
                 item.coAssigneeNames?.includes(user.name)
             );
-            const uOverdueCount = uTasks.filter(
-              (item) =>
-                item.status === 'Overdue' ||
-                (item.status !== 'Completed' && item.status !== 'Cancelled' && item.due < todayStr)
-            ).length;
+            const uOverdueCount = uTasks.filter((item) => isTaskOverdue(item, todayStr)).length;
+            const uDueSoonCount = uTasks.filter((item) => isTaskNearDeadline(item, todayStr)).length;
             const uTraining = trainingLogs.filter(
               (tr) =>
                 tr.attendeeIds?.includes(user.id) ||
@@ -197,7 +197,10 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                 tr.coTrainerNames?.includes(user.name) ||
                 tr.trainerName === user.name
             );
-            const uHours = uTraining.reduce((sum, tr) => sum + (tr.calculatedHours || 0), 0);
+            const uHours = uTraining.reduce(
+              (sum, tr) => sum + getMemberHoursForTrainingLog(tr, user),
+              0
+            );
             const uAttendance = computeMemberMonthlyAttendance(
               user,
               reportMonth,
@@ -264,8 +267,8 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                     </div>
                   </div>
 
-                  {/* Name & Overdue Noti + Titles */}
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 min-w-0">
+                  {/* Name & Overdue + Near Deadline Noti + Titles */}
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span className="truncate">{user.name}</span>
                     {uOverdueCount > 0 && (
                       <span
@@ -279,6 +282,21 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
                         <BellRing className="w-2.5 h-2.5" />
                         <span>{uOverdueCount}</span>
+                      </span>
+                    )}
+                    {uDueSoonCount > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-extrabold shadow-2xs tabular-nums"
+                        title={
+                          language === 'my'
+                            ? `${user.name} တွင် Deadline နီးနေသော Task ${uDueSoonCount} ခု ရှိပါသည်`
+                            : `${user.name} has ${uDueSoonCount} task(s) nearing deadline`
+                        }
+                      >
+                        <Bell className="w-2.5 h-2.5 text-amber-700" />
+                        <span>
+                          {uDueSoonCount} {language === 'my' ? 'နီး' : 'soon'}
+                        </span>
                       </span>
                     )}
                   </h4>

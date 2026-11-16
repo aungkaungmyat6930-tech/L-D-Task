@@ -2,6 +2,30 @@
 
 :root {
   font-family: 'Plus Jakarta Sans', 'Padauk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --app-text-color: #1e293b;
+}
+
+/* Custom Font Color scoping when Admin/Super Admin sets a custom body color */
+[data-custom-text-color="true"] main,
+[data-custom-text-color="true"] .custom-theme-scope {
+  color: var(--app-text-color);
+}
+
+[data-custom-text-color="true"] main .text-slate-900,
+[data-custom-text-color="true"] main .text-slate-800,
+[data-custom-text-color="true"] main .text-slate-700,
+[data-custom-text-color="true"] .custom-theme-scope .text-slate-900,
+[data-custom-text-color="true"] .custom-theme-scope .text-slate-800,
+[data-custom-text-color="true"] .custom-theme-scope .text-slate-700 {
+  color: var(--app-text-color);
+}
+
+[data-custom-text-color="true"] main .bg-slate-900,
+[data-custom-text-color="true"] main .bg-slate-950,
+[data-custom-text-color="true"] .bg-slate-900 .text-white,
+[data-custom-text-color="true"] .bg-slate-950 .text-white,
+[data-custom-text-color="true"] .text-white {
+  color: #ffffff;
 }
 
 /* Custom scrollbars */

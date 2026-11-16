@@ -8,7 +8,8 @@ import {
   TabType,
   MemberStatus,
   AttendanceRecord,
-  AttendanceOverrideStatus
+  AttendanceOverrideStatus,
+  AppearanceSettings
 } from './types';
 import { 
   INITIAL_USERS, 
@@ -23,6 +24,8 @@ import {
   canApproveLeave,
   canApproveTaskCompletion,
 } from './utils/roleHelpers';
+import { isTaskOverdue, isTaskNearDeadline } from './utils/taskHelpers';
+import { formatTotalTrainerHours } from './utils/trainingHelpers';
 
 // Components
 import { Header } from './components/Header';
@@ -45,6 +48,17 @@ import { WorkflowModal } from './components/WorkflowModal';
 import { UserManagementModal } from './components/UserManagementModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AdminPasswordModal } from './components/AdminPasswordModal';
+import { AppearanceSettingsModal } from './components/AppearanceSettingsModal';
+
+const DEFAULT_APPEARANCE: AppearanceSettings = {
+  fontScale: 'md',
+  customFontSizePx: 16,
+  textColor: '#1e293b',
+  themeColor: '#0f172a',
+  accentColor: '#2563eb',
+  logoType: 'badge',
+  logoText: 'KBZ',
+};
 
 const STORAGE_KEYS = {
   USERS: 'kbz_ld_portal_users_v3',
@@ -57,6 +71,7 @@ const STORAGE_KEYS = {
   ADMIN_PWD: 'kbz_ld_portal_admin_pwd_v1',
   ATTENDANCE: 'kbz_ld_portal_attendance_v1',
   ALLOW_MEMBER_DEADLINE: 'kbz_ld_allow_member_deadline_v1',
+  APPEARANCE: 'kbz_ld_portal_appearance_v1',
 };
 
 const SESSION_ADMIN_UNLOCKED = 'kbz_ld_admin_unlocked_v1';
@@ -192,9 +207,18 @@ export default function App() {
     }
   });
 
+  const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.APPEARANCE);
+      return saved ? { ...DEFAULT_APPEARANCE, ...JSON.parse(saved) } : DEFAULT_APPEARANCE;
+    } catch {
+      return DEFAULT_APPEARANCE;
+    }
+  });
+
   const [currentTab, setCurrentTab] = useState<TabType>('directory');
   const [taskFilterRequest, setTaskFilterRequest] = useState<{
-    filter: 'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed';
+    filter: 'all' | 'my' | 'overdue' | 'due-soon' | 'active' | 'pending' | 'completed';
     key: number;
   } | null>(null);
   const [leaveFilterRequest, setLeaveFilterRequest] = useState<{
@@ -207,6 +231,7 @@ export default function App() {
   const [isOrgChartModalOpen, setIsOrgChartModalOpen] = useState(false);
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isAppearanceModalOpen, setIsAppearanceModalOpen] = useState(false);
 
   // Admin Password Modal States
   const [adminPwdModalOpen, setAdminPwdModalOpen] = useState(false);
@@ -314,6 +339,33 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ALLOW_MEMBER_DEADLINE, String(allowMemberDeadlineSetup));
   }, [allowMemberDeadlineSetup]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.APPEARANCE, JSON.stringify(appearanceSettings));
+    const fontSizeMap: Record<AppearanceSettings['fontScale'], number> = {
+      sm: 14,
+      md: 16,
+      lg: 18,
+      xl: 20,
+    };
+    const resolvedPx =
+      appearanceSettings.customFontSizePx || fontSizeMap[appearanceSettings.fontScale] || 16;
+    document.documentElement.style.fontSize = `${resolvedPx}px`;
+    document.documentElement.style.setProperty('--app-text-color', appearanceSettings.textColor);
+    document.documentElement.style.setProperty(
+      '--app-theme-color',
+      appearanceSettings.themeColor || '#0f172a'
+    );
+    document.documentElement.style.setProperty(
+      '--app-accent-color',
+      appearanceSettings.accentColor || '#2563eb'
+    );
+    if (appearanceSettings.textColor && appearanceSettings.textColor.toLowerCase() !== '#1e293b') {
+      document.documentElement.setAttribute('data-custom-text-color', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-custom-text-color');
+    }
+  }, [appearanceSettings]);
 
   // Auto-evaluate Overdue Tasks
   useEffect(() => {
@@ -442,6 +494,7 @@ export default function App() {
     setProjects(INITIAL_PROJECTS);
     setAttendanceOverrides([]);
     setAllowMemberDeadlineSetup(true);
+    setAppearanceSettings(DEFAULT_APPEARANCE);
     const defaultUser = INITIAL_USERS.find((u) => u.name === 'Aung Kyaw') || INITIAL_USERS[0];
     setCurrentUser(defaultUser);
     showToast(
@@ -532,12 +585,16 @@ export default function App() {
         const updatedCoTrainers = (tr.coTrainerNames || []).map((co) =>
           co === oldName ? newName : co
         );
+        const updatedTrainerHours = tr.trainerHours?.map((th) =>
+          th.userId === updatedUser.id || th.name === oldName ? { ...th, name: newName } : th
+        );
         const updatedTrainer = tr.trainerName === oldName ? newName : tr.trainerName;
         const updatedEditedBy = tr.editedBy === oldName ? newName : tr.editedBy;
         return {
           ...tr,
           attendeeNames: updatedAttendees,
           coTrainerNames: tr.coTrainerNames ? updatedCoTrainers : undefined,
+          trainerHours: updatedTrainerHours,
           trainerName: updatedTrainer,
           editedBy: updatedEditedBy,
         };
@@ -551,10 +608,21 @@ export default function App() {
         const updatedCoNames = (p.coAssigneeNames || []).map((cn) =>
           cn === oldName ? newName : cn
         );
+        const updatedProjectComments = (p.comments || []).map((c) => {
+          if (c.authorId === updatedUser.id || c.authorName === oldName) {
+            return {
+              ...c,
+              authorName: newName,
+              authorAvatar: updatedUser.avatar,
+            };
+          }
+          return c;
+        });
         return {
           ...p,
           ownerName: isOwner ? newName : p.ownerName,
           coAssigneeNames: p.coAssigneeNames ? updatedCoNames : undefined,
+          comments: updatedProjectComments,
         };
       })
     );
@@ -881,6 +949,7 @@ export default function App() {
         end: leaveData.end || todayStr,
         duration: leaveData.duration || 1,
         reason: leaveData.reason || '',
+        attachments: leaveData.attachments || [],
         status: initialStatus,
         approvedBy:
           canApprove && (initialStatus === 'Approved' || initialStatus === 'Rejected')
@@ -977,6 +1046,7 @@ export default function App() {
         trainerName: trainingData.trainerName || currentUser.name,
         coTrainerIds: trainingData.coTrainerIds || [],
         coTrainerNames: trainingData.coTrainerNames || [],
+        trainerHours: trainingData.trainerHours || [],
         attendeeIds: trainingData.attendeeIds || [currentUser.id],
         attendeeNames: trainingData.attendeeNames || [currentUser.name],
         location: trainingData.location || '',
@@ -1004,6 +1074,9 @@ export default function App() {
 
   // Add Strategic Project
   const handleAddProject = (proj: Partial<StrategicProject>) => {
+    const isAdmin = isAdminOrSuper(currentUser.roleTier);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const requestedComplete = proj.status === 'Completed' && !isAdmin;
     const newProj: StrategicProject = {
       id: `p-${Date.now()}`,
       title: proj.title || 'New Initiative',
@@ -1015,8 +1088,19 @@ export default function App() {
       followupDate: proj.followupDate,
       followupNote: proj.followupNote,
       deliverables: proj.deliverables || '',
-      progress: proj.progress ?? 10,
-      status: proj.status || 'In Progress',
+      progress: proj.status === 'Completed' && isAdmin ? 100 : proj.progress ?? 10,
+      status: requestedComplete ? 'Final Review' : proj.status || 'In Progress',
+      completionRequested: requestedComplete,
+      completionRequestedBy: requestedComplete ? currentUser.name : undefined,
+      completionRequestedAt: requestedComplete ? todayStr : undefined,
+      completionStatus: requestedComplete
+        ? 'Pending'
+        : proj.status === 'Completed' && isAdmin
+        ? 'Approved'
+        : undefined,
+      completionApprovedBy: proj.status === 'Completed' && isAdmin ? currentUser.name : undefined,
+      completionApprovedAt: proj.status === 'Completed' && isAdmin ? todayStr : undefined,
+      comments: [],
     };
     setProjects((prev) => [newProj, ...prev]);
     showToast(
@@ -1025,13 +1109,175 @@ export default function App() {
   };
 
   const handleUpdateProject = (updatedProj: StrategicProject) => {
+    const isAdmin = isAdminOrSuper(currentUser.roleTier);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Enforce Admin / Super Admin approval when a non-admin tries to mark a Project Completed
+    if (updatedProj.status === 'Completed' && !isAdmin) {
+      const pendingProj: StrategicProject = {
+        ...updatedProj,
+        status: 'Final Review',
+        completionRequested: true,
+        completionStatus: 'Pending',
+        completionRequestedBy: currentUser.name,
+        completionRequestedAt: todayStr,
+        completionApprovedBy: undefined,
+        completionApprovedAt: undefined,
+      };
+      setProjects((prev) =>
+        prev.map((p) => (p.id === updatedProj.id ? pendingProj : p))
+      );
+      showToast(
+        language === 'my'
+          ? `"${updatedProj.title}" Complete ဖြစ်ရန် Admin / Super Admin ထံ Approval တောင်းခံပြီးပါပြီ။`
+          : `Completion approval requested from Admin / Super Admin for "${updatedProj.title}".`
+      );
+      return;
+    }
+
+    const normalizedProj: StrategicProject =
+      updatedProj.status === 'Completed' && isAdmin
+        ? {
+            ...updatedProj,
+            progress: 100,
+            completionRequested: false,
+            completionStatus: 'Approved',
+            completionApprovedBy: updatedProj.completionApprovedBy || currentUser.name,
+            completionApprovedAt: updatedProj.completionApprovedAt || todayStr,
+          }
+        : updatedProj;
+
     setProjects((prev) =>
-      prev.map((p) => (p.id === updatedProj.id ? updatedProj : p))
+      prev.map((p) => (p.id === updatedProj.id ? normalizedProj : p))
     );
     showToast(
       language === 'my'
         ? `စီမံကိန်း "${updatedProj.title}" ကို ပြင်ဆင်သိမ်းဆည်းပြီးပါပြီ။`
         : `Project "${updatedProj.title}" updated.`
+    );
+  };
+
+  const handleRequestProjectCompletion = (projectId: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              status: 'Final Review',
+              completionRequested: true,
+              completionStatus: 'Pending',
+              completionRequestedBy: currentUser.name,
+              completionRequestedAt: todayStr,
+              completionApprovedBy: undefined,
+              completionApprovedAt: undefined,
+            }
+          : p
+      )
+    );
+    showToast(
+      language === 'my'
+        ? 'Project Complete ဖြစ်/မဖြစ် Admin / Super Admin ထံ Approval တောင်းခံပြီးပါပြီ။'
+        : 'Project completion approval requested from Admin / Super Admin.'
+    );
+  };
+
+  const handleReviewProjectCompletion = (
+    projectId: string,
+    decision: 'Approved' | 'Pending' | 'Rejected'
+  ) => {
+    if (!isAdminOrSuper(currentUser.roleTier)) {
+      showToast(
+        language === 'my'
+          ? 'Admin သို့မဟုတ် Super Admin များသာ Project Complete Approval ဆုံးဖြတ်ခွင့်ရှိပါသည်။'
+          : 'Only Admin or Super Admin can approve, mark pending, or reject project completion.'
+      );
+      return;
+    }
+    const todayStr = new Date().toISOString().split('T')[0];
+    setProjects((prev) =>
+      prev.map((p) => {
+        if (p.id !== projectId) return p;
+        if (decision === 'Approved') {
+          return {
+            ...p,
+            status: 'Completed',
+            progress: 100,
+            completionRequested: false,
+            completionStatus: 'Approved',
+            completionApprovedBy: currentUser.name,
+            completionApprovedAt: todayStr,
+          };
+        }
+        if (decision === 'Pending') {
+          return {
+            ...p,
+            status: 'Final Review',
+            completionRequested: true,
+            completionStatus: 'Pending',
+            completionApprovedBy: currentUser.name,
+            completionApprovedAt: todayStr,
+          };
+        }
+        return {
+          ...p,
+          status: 'In Progress',
+          completionRequested: false,
+          completionStatus: 'Rejected',
+          completionApprovedBy: currentUser.name,
+          completionApprovedAt: todayStr,
+        };
+      })
+    );
+
+    showToast(
+      decision === 'Approved'
+        ? language === 'my'
+          ? `Project ပြီးစီးမှုကို ${currentUser.name} မှ Approve လုပ်ပြီးပါပြီ။`
+          : `Project completion approved by ${currentUser.name}.`
+        : decision === 'Pending'
+        ? language === 'my'
+          ? `Project ကို ${currentUser.name} မှ Pending အဖြစ် သတ်မှတ်ထားပါသည်။`
+          : `Project kept Pending by ${currentUser.name}.`
+        : language === 'my'
+        ? `Project ပြီးစီးမှုကို ${currentUser.name} မှ Reject လုပ်ပြီး In Progress သို့ ပြန်ပို့လိုက်ပါပြီ။`
+        : `Project completion rejected by ${currentUser.name}.`
+    );
+  };
+
+  const handleAddProjectComment = (projectId: string, text: string) => {
+    const now = new Date();
+    const timeStr =
+      now.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }) +
+      ', ' +
+      now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+    const newComment = {
+      id: `pc-${Date.now()}`,
+      authorId: currentUser.id,
+      authorName: currentUser.name,
+      authorAvatar: currentUser.avatar,
+      text,
+      timestamp: timeStr,
+    };
+
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId ? { ...p, comments: [...(p.comments || []), newComment] } : p
+      )
+    );
+    showToast(
+      language === 'my' ? 'Project မှတ်ချက် တင်ပြီးပါပြီ။' : 'Project comment added.'
+    );
+  };
+
+  const handleDeleteProjectComment = (projectId: string, commentId: string) => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, comments: (p.comments || []).filter((c) => c.id !== commentId) }
+          : p
+      )
     );
   };
 
@@ -1177,6 +1423,7 @@ export default function App() {
   };
 
   // Calculated Metric Totals
+  const todayStr = new Date().toISOString().split('T')[0];
   const activeTasksCount = useMemo(
     () =>
       tasks.filter(
@@ -1185,15 +1432,19 @@ export default function App() {
     [tasks]
   );
   const overdueTasksCount = useMemo(
-    () => tasks.filter((t) => t.status === 'Overdue').length,
-    [tasks]
+    () => tasks.filter((t) => isTaskOverdue(t, todayStr)).length,
+    [tasks, todayStr]
+  );
+  const dueSoonTasksCount = useMemo(
+    () => tasks.filter((t) => isTaskNearDeadline(t, todayStr)).length,
+    [tasks, todayStr]
   );
   const pendingLeavesCount = useMemo(
     () => leaves.filter((l) => l.status === 'Pending').length,
     [leaves]
   );
   const totalTrainingHours = useMemo(
-    () => trainingLogs.reduce((acc, tr) => acc + (tr.calculatedHours || 0), 0),
+    () => trainingLogs.reduce((acc, tr) => acc + formatTotalTrainerHours(tr), 0),
     [trainingLogs]
   );
 
@@ -1227,12 +1478,17 @@ export default function App() {
           setAdminPwdModalOpen(true);
         }}
         onLockAdmin={handleLockAdmin}
+        onOpenAppearanceSettings={() => setIsAppearanceModalOpen(true)}
+        appearanceSettings={appearanceSettings}
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
         onJumpToFiltered={(tab, filter) => {
           setCurrentTab(tab);
-          if (tab === 'tasks' && filter === 'overdue') {
-            setTaskFilterRequest({ filter: 'overdue', key: Date.now() });
+          if (tab === 'tasks') {
+            setTaskFilterRequest({
+              filter: filter === 'due-soon' ? 'due-soon' : 'overdue',
+              key: Date.now(),
+            });
           } else if (tab === 'leave' && filter === 'pending') {
             setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
           }
@@ -1241,6 +1497,7 @@ export default function App() {
         onToggleLanguage={handleToggleLanguage}
         pendingLeavesCount={pendingLeavesCount}
         overdueTasksCount={overdueTasksCount}
+        dueSoonTasksCount={dueSoonTasksCount}
       />
 
       {/* Main Content Area */}
@@ -1249,12 +1506,19 @@ export default function App() {
         <MetricsOverview
           activeTasksCount={activeTasksCount}
           overdueTasksCount={overdueTasksCount}
+          dueSoonTasksCount={dueSoonTasksCount}
           pendingLeavesCount={pendingLeavesCount}
           totalTrainingHours={totalTrainingHours}
           onSelectMetric={(tab, filter) => {
             setCurrentTab(tab);
             if (tab === 'tasks') {
-              setTaskFilterRequest({ filter: filter === 'overdue' ? 'overdue' : 'active', key: Date.now() });
+              const targetFilter =
+                filter === 'overdue'
+                  ? 'overdue'
+                  : filter === 'due-soon'
+                  ? 'due-soon'
+                  : 'active';
+              setTaskFilterRequest({ filter: targetFilter, key: Date.now() });
             } else if (tab === 'leave') {
               setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
             }
@@ -1385,6 +1649,10 @@ export default function App() {
             onAddProject={handleAddProject}
             onUpdateProject={handleUpdateProject}
             onDeleteProject={handleDeleteProject}
+            onRequestProjectCompletion={handleRequestProjectCompletion}
+            onReviewProjectCompletion={handleReviewProjectCompletion}
+            onAddProjectComment={handleAddProjectComment}
+            onDeleteProjectComment={handleDeleteProjectComment}
             onSaveTask={handleSaveTask}
             onDeleteTask={handleDeleteTask}
             onApproveTaskCompletion={handleApproveTaskCompletion}
@@ -1613,6 +1881,30 @@ export default function App() {
         onClose={() => {
           setAdminPwdModalOpen(false);
           setPendingAdminUser(null);
+        }}
+        language={language}
+      />
+
+      {/* 11. Admin / Super Admin Logo, Theme Color, Custom Font Size & Font Color Modal */}
+      <AppearanceSettingsModal
+        isOpen={isAppearanceModalOpen}
+        onClose={() => setIsAppearanceModalOpen(false)}
+        settings={appearanceSettings}
+        onSaveSettings={(next) => {
+          setAppearanceSettings(next);
+          showToast(
+            language === 'my'
+              ? 'Portal Logo, Theme Color နှင့် Font Style ကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။'
+              : 'Portal logo, theme color, and font settings updated.'
+          );
+        }}
+        onResetSettings={() => {
+          setAppearanceSettings(DEFAULT_APPEARANCE);
+          showToast(
+            language === 'my'
+              ? 'Logo, Theme Color နှင့် Font Style ကို မူလအတိုင်း ပြန်ထားပြီးပါပြီ။'
+              : 'Appearance settings reset to default.'
+          );
         }}
         language={language}
       />

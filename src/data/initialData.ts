@@ -265,10 +265,15 @@ export const INITIAL_TRAINING: TrainingLog[] = [
     trainerName: 'Daw May Oo',
     coTrainerNames: ['Aung Kyaw', 'Thiri Mg'],
     coTrainerIds: ['u3', 'u4'],
-    attendeeNames: ['Aung Kyaw', 'Thiri Mg'],
-    attendeeIds: ['u3', 'u4'],
+    trainerHours: [
+      { userId: 'u2', name: 'Daw May Oo', role: 'Lead Trainer', topic: 'Whole Life', hours: 2.0 },
+      { userId: 'u3', name: 'Aung Kyaw', role: 'Co-Trainer', topic: 'Universal Life', hours: 2.0 },
+      { userId: 'u4', name: 'Thiri Mg', role: 'Co-Trainer', topic: 'PA (Personal Accident)', hours: 2.0 },
+    ],
+    attendeeNames: ['Daw May Oo', 'Aung Kyaw', 'Thiri Mg'],
+    attendeeIds: ['u2', 'u3', 'u4'],
     location: 'Yangon Central Training Hall 1',
-    notes: 'Covered whole life and endowment cross-selling techniques.',
+    notes: 'Covered whole life, universal life, and PA cross-selling techniques.',
     createdAt: '2026-11-02',
   },
   {

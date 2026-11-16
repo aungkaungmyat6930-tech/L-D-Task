@@ -3,6 +3,7 @@ import {
   TaskItem,
   UserProfile,
   LeaveRequest,
+  LeaveAttachment,
 } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import {
@@ -20,6 +21,11 @@ import {
   canApproveTaskCompletion,
 } from '../utils/roleHelpers';
 import {
+  isTaskOverdue,
+  isTaskNearDeadline,
+  formatDeadlineNotiLabel,
+} from '../utils/taskHelpers';
+import {
   Calendar,
   MessageSquare,
   Plus,
@@ -34,8 +40,11 @@ import {
   FileCheck2,
   CheckSquare,
   AlertTriangle,
+  Bell,
+  FileText,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { AttachmentPreviewModal } from './AttachmentPreviewModal';
 
 interface WeeklyBoardTabProps {
   tasks: TaskItem[];
@@ -85,6 +94,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
 
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
   const [leaveToDelete, setLeaveToDelete] = useState<LeaveRequest | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<LeaveAttachment | null>(null);
 
   const weeksInMonth = getWeeksInMonth(selectedMonth);
   const safeWeek: WeekNumber = weeksInMonth.includes(selectedWeek) ? selectedWeek : 1;
@@ -132,7 +142,8 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
       (item) => item.status === 'Active' || item.status === 'Pending' || item.status === 'Waiting'
     ).length;
     const completedTasks = scopedTasks.filter((item) => item.status === 'Completed').length;
-    const overdueTasks = scopedTasks.filter((item) => item.status === 'Overdue').length;
+    const overdueTasks = scopedTasks.filter((item) => isTaskOverdue(item, todayStr)).length;
+    const dueSoonTasks = scopedTasks.filter((item) => isTaskNearDeadline(item, todayStr)).length;
     const approvedWeekLeaves = weekOverlappingLeaves.filter((l) => l.status === 'Approved').length;
     return {
       totalScoped: scopedTasks.length,
@@ -140,10 +151,11 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
       activeTasks,
       completedTasks,
       overdueTasks,
+      dueSoonTasks,
       approvedWeekLeaves,
       pendingCount: pendingLeaves.length,
     };
-  }, [tasks, scopedTasks, weekStartStr, weekEndStr, weekOverlappingLeaves, pendingLeaves.length]);
+  }, [tasks, scopedTasks, weekStartStr, weekEndStr, weekOverlappingLeaves, pendingLeaves.length, todayStr]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -263,8 +275,8 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
           </div>
         </div>
 
-        {/* 4 Summary Tiles for Selected Week */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+        {/* 5 Summary Tiles for Selected Week (Overdue & Due Soon separated) */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
             <div>
               <span className="text-[11px] font-bold text-blue-700 block">
@@ -293,7 +305,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                   weeklySummaryStats.overdueTasks > 0 ? 'text-red-700' : 'text-emerald-700'
                 }`}
               >
-                {language === 'my' ? 'ပြီးစီး / ရက်ကျော် Task' : 'Completed / Overdue'}
+                {language === 'my' ? 'ပြီးစီး / Overdue' : 'Completed / Overdue'}
               </span>
               <span className="text-lg font-black text-slate-900 tabular-nums">
                 {weeklySummaryStats.completedTasks}{' '}
@@ -311,6 +323,36 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
             ) : (
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             )}
+          </div>
+
+          <div
+            className={`rounded-xl px-4 py-2.5 flex items-center justify-between border ${
+              weeklySummaryStats.dueSoonTasks > 0
+                ? 'bg-amber-50 border-amber-300'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div>
+              <span
+                className={`text-[11px] font-bold block ${
+                  weeklySummaryStats.dueSoonTasks > 0 ? 'text-amber-800' : 'text-slate-500'
+                }`}
+              >
+                {language === 'my' ? 'Due Soon (Deadline နီး)' : 'Due Soon Tasks'}
+              </span>
+              <span
+                className={`text-lg font-black tabular-nums ${
+                  weeklySummaryStats.dueSoonTasks > 0 ? 'text-amber-900' : 'text-slate-900'
+                }`}
+              >
+                {weeklySummaryStats.dueSoonTasks}
+              </span>
+            </div>
+            <Bell
+              className={`w-5 h-5 ${
+                weeklySummaryStats.dueSoonTasks > 0 ? 'text-amber-600' : 'text-slate-400'
+              }`}
+            />
           </div>
 
           <div className="bg-teal-50 border border-teal-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
@@ -496,6 +538,30 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                             <span aria-hidden="true">·</span>
                             <span className="truncate max-w-md">{leave.reason}</span>
                           </div>
+                          {leave.attachments && leave.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {leave.attachments.map((att) => (
+                                <button
+                                  key={att.id}
+                                  type="button"
+                                  onClick={() => setPreviewAttachment(att)}
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-300 text-[10px] font-semibold transition"
+                                  title={att.name}
+                                >
+                                  {att.mimeType.startsWith('image/') ? (
+                                    <img
+                                      src={att.dataUrl}
+                                      alt={att.name}
+                                      className="w-3.5 h-3.5 rounded-xs object-cover shrink-0"
+                                    />
+                                  ) : (
+                                    <FileText className="w-3 h-3 text-red-600 shrink-0" />
+                                  )}
+                                  <span className="truncate max-w-[90px]">{att.name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           {(leave.approvedBy || leave.adminNote) && (
                             <div className="text-[10px] text-purple-700 font-medium">
                               {leave.approvedBy ? `Reviewed by ${leave.approvedBy}` : ''}
@@ -634,6 +700,7 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                     ) : (
                       dayTasks.map((task) => {
                         const isOverdue = task.status === 'Overdue';
+                        const nearLabel = formatDeadlineNotiLabel(task, todayStr, language);
                         const isMyTask =
                           task.ownerId === currentUser.id ||
                           task.ownerName === currentUser.name ||
@@ -647,12 +714,14 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                             className={`bg-white p-3 rounded-xl border cursor-pointer hover:shadow-md transition space-y-2 relative group ${
                               isOverdue
                                 ? 'border-red-300 bg-red-50/20'
+                                : nearLabel
+                                ? 'border-amber-300 bg-amber-50/20'
                                 : isMyTask
                                 ? 'border-blue-300 bg-blue-50/30 ring-1 ring-blue-300/40'
                                 : 'border-slate-200'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-center justify-between gap-1 flex-wrap">
                               <span
                                 className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
                                   task.status === 'Completed'
@@ -674,6 +743,13 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
                                 {task.due}
                               </span>
                             </div>
+
+                            {nearLabel && (
+                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-extrabold">
+                                <Bell className="w-2.5 h-2.5 text-amber-700" />
+                                <span>{nearLabel}</span>
+                              </div>
+                            )}
 
                             {task.completionRequested && (
                               <div className="flex items-center justify-between gap-1 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
@@ -806,6 +882,11 @@ export const WeeklyBoardTab: React.FC<WeeklyBoardTabProps> = ({
         }
         confirmLabel={language === 'my' ? 'ဖျက်မည်' : 'Delete Leave'}
         cancelLabel={language === 'my' ? 'မဖျက်တော့ပါ' : 'Cancel'}
+        language={language}
+      />
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
         language={language}
       />
     </div>

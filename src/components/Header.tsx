@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserProfile, TabType } from '../types';
+import { UserProfile, TabType, AppearanceSettings } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { isSuperAdmin, isAdminOrSuper } from '../utils/roleHelpers';
 import { 
@@ -19,7 +19,9 @@ import {
   Eye,
   AlertTriangle,
   KeyRound,
-  Lock
+  Lock,
+  Palette,
+  Bell
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -31,13 +33,16 @@ interface HeaderProps {
   onResetData: () => void;
   onOpenChangeAdminPassword: () => void;
   onLockAdmin: () => void;
+  onOpenAppearanceSettings: () => void;
+  appearanceSettings: AppearanceSettings;
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
-  onJumpToFiltered?: (tab: 'tasks' | 'leave', filter: 'overdue' | 'pending') => void;
+  onJumpToFiltered?: (tab: 'tasks' | 'leave', filter: 'overdue' | 'due-soon' | 'pending') => void;
   language: Language;
   onToggleLanguage: () => void;
   pendingLeavesCount: number;
   overdueTasksCount: number;
+  dueSoonTasksCount: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -49,6 +54,8 @@ export const Header: React.FC<HeaderProps> = ({
   onResetData,
   onOpenChangeAdminPassword,
   onLockAdmin,
+  onOpenAppearanceSettings,
+  appearanceSettings,
   currentTab,
   onSelectTab,
   onJumpToFiltered,
@@ -56,20 +63,37 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleLanguage,
   pendingLeavesCount,
   overdueTasksCount,
+  dueSoonTasksCount,
 }) => {
   const t = TRANSLATIONS[language];
   const isSuper = isSuperAdmin(currentUser.roleTier);
   const isAnyAdmin = isAdminOrSuper(currentUser.roleTier);
+  const themeColor = appearanceSettings.themeColor || '#0f172a';
+  const accentColor = appearanceSettings.accentColor || '#2563eb';
+  const logoText = appearanceSettings.logoText?.trim() || 'KBZ';
+  const isCustomLogoImage =
+    appearanceSettings.logoType === 'image' && Boolean(appearanceSettings.logoImageDataUrl);
 
   return (
-    <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
+    <header
+      className="text-white border-b border-white/10 sticky top-0 z-40 shadow-md"
+      style={{ backgroundColor: themeColor }}
+    >
       {/* Top Banner Row */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center justify-between gap-4">
         {/* Brand Zone */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex items-center justify-center font-extrabold text-slate-950 text-base shadow-sm ring-2 ring-amber-400/40 shrink-0">
-            KBZ
-          </div>
+          {isCustomLogoImage ? (
+            <img
+              src={appearanceSettings.logoImageDataUrl}
+              alt="Portal Logo"
+              className="w-10 h-10 rounded-xl object-contain bg-white/10 p-0.5 ring-2 ring-white/25 shrink-0 shadow-sm"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex items-center justify-center font-extrabold text-slate-950 text-sm shadow-sm ring-2 ring-amber-400/40 shrink-0 px-1 truncate">
+              {logoText}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <span className="text-base font-bold tracking-tight text-white whitespace-nowrap">
@@ -195,9 +219,21 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Admin Password & Lock Controls */}
+            {/* Admin Font/Color, Password & Lock Controls */}
             {isAnyAdmin && (
               <div className="flex items-center gap-1.5">
+                <button
+                  onClick={onOpenAppearanceSettings}
+                  title={
+                    language === 'my'
+                      ? 'Logo, Theme Color နှင့် Font Style ပြင်ဆင်ရန်'
+                      : 'Customize Logo, Theme Color & Font Style'
+                  }
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-cyan-100 bg-cyan-800/70 hover:bg-cyan-700 border border-cyan-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
+                >
+                  <Palette className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>{language === 'my' ? 'Logo / Theme / Font' : 'Theme & Logo'}</span>
+                </button>
                 <button
                   onClick={onOpenChangeAdminPassword}
                   title={language === 'my' ? 'Admin Password ပြောင်းရန်' : 'Change Admin Password'}
@@ -231,23 +267,23 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Admin Alert Notice Bar if overdue or pending leaves exist */}
-      {(pendingLeavesCount > 0 || overdueTasksCount > 0) && (
+      {/* Admin Alert Notice Bar if overdue, near deadline, or pending leaves exist */}
+      {(pendingLeavesCount > 0 || overdueTasksCount > 0 || dueSoonTasksCount > 0) && (
         <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-4 py-1.5 text-xs">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <AlertTriangle className="w-4 h-4 text-amber-200 shrink-0" />
-              <span>
+              <span className="flex flex-wrap items-center gap-2">
                 <strong>
                   {isSuper
                     ? 'Super Admin Notice:'
                     : isAnyAdmin
                     ? 'Admin Action Notice:'
                     : 'Notice:'}
-                </strong>{' '}
+                </strong>
                 {pendingLeavesCount > 0 && (
                   <span
-                    className="font-semibold underline cursor-pointer mr-2"
+                    className="font-semibold underline cursor-pointer"
                     onClick={() =>
                       onJumpToFiltered ? onJumpToFiltered('leave', 'pending') : onSelectTab('leave')
                     }
@@ -265,6 +301,19 @@ export const Header: React.FC<HeaderProps> = ({
                     {overdueTasksCount} {t.metricOverdue.toLowerCase()}
                   </span>
                 )}
+                {dueSoonTasksCount > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 font-bold bg-amber-950/35 hover:bg-amber-950/55 px-2 py-0.5 rounded-full cursor-pointer transition"
+                    onClick={() =>
+                      onJumpToFiltered ? onJumpToFiltered('tasks', 'due-soon') : onSelectTab('tasks')
+                    }
+                  >
+                    <Bell className="w-3 h-3 text-yellow-300" />
+                    <span>
+                      {dueSoonTasksCount} {language === 'my' ? 'Deadline နီးနေသည်' : 'due soon'}
+                    </span>
+                  </span>
+                )}
               </span>
             </div>
             <button
@@ -273,8 +322,12 @@ export const Header: React.FC<HeaderProps> = ({
                   ? onJumpToFiltered
                     ? onJumpToFiltered('leave', 'pending')
                     : onSelectTab('leave')
+                  : overdueTasksCount > 0
+                  ? onJumpToFiltered
+                    ? onJumpToFiltered('tasks', 'overdue')
+                    : onSelectTab('tasks')
                   : onJumpToFiltered
-                  ? onJumpToFiltered('tasks', 'overdue')
+                  ? onJumpToFiltered('tasks', 'due-soon')
                   : onSelectTab('tasks')
               }
               className="text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded transition"
@@ -286,14 +339,20 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Navigation Tabs Bar */}
-      <nav className="bg-slate-950 border-t border-slate-800 px-4 sm:px-6 lg:px-8 overflow-x-auto">
+      <nav
+        className="border-t border-white/10 px-4 sm:px-6 lg:px-8 overflow-x-auto"
+        style={{
+          background: `linear-gradient(rgba(0, 0, 0, 0.34), rgba(0, 0, 0, 0.34)), ${themeColor}`,
+        }}
+      >
         <div className="max-w-7xl mx-auto flex gap-1 py-1 text-xs">
           <button
             onClick={() => onSelectTab('directory')}
+            style={currentTab === 'directory' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'directory'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
@@ -302,10 +361,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onSelectTab('tasks')}
+            style={currentTab === 'tasks' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'tasks'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <CheckSquare className="w-3.5 h-3.5" />
@@ -315,14 +375,23 @@ export const Header: React.FC<HeaderProps> = ({
                 {overdueTasksCount}
               </span>
             )}
+            {dueSoonTasksCount > 0 && (
+              <span
+                className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-amber-400 text-slate-950 font-bold rounded-full"
+                title={language === 'my' ? 'Deadline နီးနေသော Task များ' : 'Tasks nearing deadline'}
+              >
+                {dueSoonTasksCount}
+              </span>
+            )}
           </button>
 
           <button
             onClick={() => onSelectTab('leave')}
+            style={currentTab === 'leave' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'leave'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <CalendarDays className="w-3.5 h-3.5" />
@@ -336,10 +405,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onSelectTab('training')}
+            style={currentTab === 'training' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'training'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
@@ -348,10 +418,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onSelectTab('weekly')}
+            style={currentTab === 'weekly' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'weekly'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
@@ -360,10 +431,11 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onSelectTab('projects')}
+            style={currentTab === 'projects' ? { backgroundColor: accentColor } : undefined}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-md font-semibold transition-colors whitespace-nowrap ${
               currentTab === 'projects'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-300 hover:text-white hover:bg-slate-800'
+                ? 'text-white shadow-sm'
+                : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <FolderKanban className="w-3.5 h-3.5" />

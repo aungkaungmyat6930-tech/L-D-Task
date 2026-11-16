@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LeaveRequest, UserProfile, LeaveType, LeaveStatus } from '../types';
+import { LeaveRequest, UserProfile, LeaveType, LeaveStatus, LeaveAttachment } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import {
   WEEKDAY_CODES,
@@ -14,7 +14,9 @@ import {
   formatMonthLabel,
 } from '../utils/weekHelpers';
 import { isAdminOrSuper, canApproveLeave } from '../utils/roleHelpers';
-import { X, Check, CalendarDays, ShieldCheck, FileCheck2 } from 'lucide-react';
+import { processLeaveAttachmentFile } from '../utils/imageUpload';
+import { AttachmentPreviewModal } from './AttachmentPreviewModal';
+import { X, Check, CalendarDays, ShieldCheck, FileCheck2, Paperclip, FileText, Image as ImageIcon, Trash2 } from 'lucide-react';
 
 interface LeaveModalProps {
   isOpen: boolean;
@@ -49,6 +51,9 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
   const [end, setEnd] = useState(new Date().toISOString().split('T')[0]);
   const [duration, setDuration] = useState(1);
   const [reason, setReason] = useState('');
+  const [attachments, setAttachments] = useState<LeaveAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<LeaveAttachment | null>(null);
 
   // Admin HR Alignment States
   const [status, setStatus] = useState<LeaveStatus>('Pending');
@@ -57,6 +62,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
   const [adminNote, setAdminNote] = useState('');
 
   useEffect(() => {
+    setAttachmentError(null);
     if (leaveToEdit) {
       setMemberId(leaveToEdit.memberId || (targetMember ? targetMember.id : currentUser.id));
       setType(leaveToEdit.type);
@@ -64,6 +70,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
       setEnd(leaveToEdit.end);
       setDuration(leaveToEdit.duration);
       setReason(leaveToEdit.reason);
+      setAttachments(leaveToEdit.attachments || []);
       setStatus(leaveToEdit.status);
       setHrRefId(leaveToEdit.hrRefId || '');
       setHrSynced(Boolean(leaveToEdit.hrSynced));
@@ -76,6 +83,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
       setEnd(initDate);
       setDuration(1);
       setReason('');
+      setAttachments([]);
       setStatus('Pending');
       setHrRefId('');
       setHrSynced(false);
@@ -114,6 +122,27 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
     handleStartEndChange(targetDt, targetDt);
   };
 
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setAttachmentError(null);
+
+    const added: LeaveAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const processed = await processLeaveAttachmentFile(files[i]);
+        added.push(processed);
+      } catch (err: any) {
+        setAttachmentError(err?.message || 'Unable to attach file.');
+      }
+    }
+
+    if (added.length > 0) {
+      setAttachments((prev) => [...prev, ...added]);
+    }
+    e.target.value = '';
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) return;
@@ -129,6 +158,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
       end,
       duration: Number(duration) || 1,
       reason: reason.trim(),
+      attachments,
     };
 
     if (isAdmin) {
@@ -226,6 +256,7 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
                 <option value="Casual Leave">Casual Leave (ရှောင်တခင်ခွင့်)</option>
                 <option value="Earned Leave">Earned Leave (လုပ်သက်ခွင့်)</option>
                 <option value="Medical Leave">Medical Leave (ဆေးခွင့်)</option>
+                <option value="Replacement Leave">Replacement Leave (အစားထိုးခွင့်)</option>
                 <option value="Training/Exam Leave">Training/Exam Leave (စာမေးပွဲ/သင်တန်းခွင့်)</option>
                 <option value="Maternity/Paternity Leave">Maternity/Paternity Leave (မီးဖွားခွင့်)</option>
                 <option value="Compassionate Leave">Compassionate Leave (သာရေး/နာရေးခွင့်)</option>
@@ -328,19 +359,92 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
             </div>
           </div>
 
-          {/* Reason */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              {t.reason} <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              rows={2}
-              required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="State reason for leave and hand-over notes..."
-              className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
+          {/* Reason & Supporting PDF / Photo Attachments */}
+          <div className="space-y-2.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t.reason} <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows={2}
+                required
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="State reason for leave and hand-over notes..."
+                className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5 text-teal-600" />
+                  <span>
+                    {language === 'my'
+                      ? 'အထောက်အထား ဖိုင်ပူးတွဲရန် (PDF / Photo)'
+                      : 'Supporting Documents (PDF / Photo)'}
+                  </span>
+                </span>
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-teal-300 hover:bg-teal-50 text-teal-700 rounded-lg text-[11px] font-bold cursor-pointer transition shadow-xs">
+                  <Paperclip className="w-3.5 h-3.5" />
+                  <span>{language === 'my' ? '+ PDF / ဓာတ်ပုံ ထည့်ရန်' : '+ Attach PDF / Photo'}</span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf,application/pdf"
+                    multiple
+                    onChange={handleAttachmentUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {attachmentError && (
+                <p className="text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1">
+                  {attachmentError}
+                </p>
+              )}
+
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {attachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-[11px] max-w-full shadow-2xs"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPreviewAttachment(att)}
+                        className="flex items-center gap-1.5 min-w-0 hover:text-teal-700 transition text-left"
+                        title={language === 'my' ? 'ဖိုင်ကြည့်ရှုရန်' : 'Preview attachment'}
+                      >
+                        {att.mimeType.startsWith('image/') ? (
+                          <img
+                            src={att.dataUrl}
+                            alt={att.name}
+                            className="w-7 h-7 rounded object-cover border border-slate-200 shrink-0"
+                          />
+                        ) : (
+                          <span className="w-7 h-7 rounded bg-red-50 text-red-600 border border-red-200 flex items-center justify-center shrink-0">
+                            <FileText className="w-3.5 h-3.5" />
+                          </span>
+                        )}
+                        <span className="font-semibold text-slate-800 truncate max-w-[140px]">
+                          {att.name}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAttachments((prev) => prev.filter((item) => item.id !== att.id))}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded transition shrink-0"
+                        title={language === 'my' ? 'ဖယ်ရှားရန်' : 'Remove'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Admin HR Leave Alignment Controls */}
@@ -453,6 +557,12 @@ export const LeaveModal: React.FC<LeaveModalProps> = ({
           </div>
         </form>
       </div>
+
+      <AttachmentPreviewModal
+        attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(null)}
+        language={language}
+      />
     </div>
   );
 };

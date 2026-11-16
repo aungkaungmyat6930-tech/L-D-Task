@@ -11,18 +11,17 @@ import {
   ComputedDayStatus,
 } from './attendanceHelpers';
 import { getWeekOrdinal, getWeekOfMonth, formatMonthLabel } from './weekHelpers';
+import { getMemberHoursForTrainingLog, getTrainerEntriesForLog, formatBreakDuration } from './trainingHelpers';
 import { Language } from './translations';
 
 function formatStatusLabel(status: ComputedDayStatus, language: Language): string {
   switch (status) {
     case 'Office':
       return language === 'my' ? 'ရုံးတက် (Office)' : 'Office';
-    case 'LeaveApproved':
-      return language === 'my' ? 'ခွင့် (အတည်ပြုပြီး)' : 'Leave (Approved)';
-    case 'LeavePending':
-      return language === 'my' ? 'ခွင့် (စောင့်ဆိုင်းဆဲ)' : 'Leave (Pending)';
-    case 'Weekend':
-      return language === 'my' ? 'စနေ/တနင်္ဂနွေ' : 'Weekend';
+    case 'Leave':
+      return language === 'my' ? 'ခွင့် (Leave)' : 'Leave';
+    case 'Unmarked':
+      return '-';
   }
 }
 
@@ -79,8 +78,7 @@ export function exportMemberMonthlyExcel(params: {
     ['Monthly Attendance & Leave Summary', 'Value'],
     ['Working Days in Month', summary.workingDaysInMonth],
     ['Office Attendance Days (ရုံးတက်ရက်)', summary.officePresentDays],
-    ['Approved Leave Days (အတည်ပြုပြီး ခွင့်ရက်)', summary.approvedLeaveDaysInMonth],
-    ['Pending Leave Days (စောင့်ဆိုင်းဆဲ ခွင့်ရက်)', summary.pendingLeaveDaysInMonth],
+    ['Leave Days (ခွင့်ရက်)', summary.approvedLeaveDaysInMonth],
     ['Training Hours (Month)', Number(summary.trainingHoursInMonth.toFixed(1))],
     ['Total Tasks (All)', memberTasks.length],
     ['Completed Tasks', memberTasks.filter((t) => t.status === 'Completed').length],
@@ -96,6 +94,8 @@ export function exportMemberMonthlyExcel(params: {
     Week: getWeekOrdinal(row.week),
     'Attendance Status': formatStatusLabel(row.status, language),
     'Leave Type': row.leave ? row.leave.type : '-',
+    'Leave Duration (Days)': row.leave ? row.leave.duration : '-',
+    'Leave Dates': row.leave ? `${row.leave.start} ~ ${row.leave.end}` : '-',
     'Leave Status': row.leave ? row.leave.status : '-',
     'HR Ref ID': row.leave?.hrRefId || '-',
     'Training Topic': row.trainingSessions.map((tr) => tr.name).join('; ') || '-',
@@ -182,24 +182,37 @@ export function exportMemberMonthlyExcel(params: {
   XLSX.utils.book_append_sheet(wb, wsTasks, 'Tasks');
 
   // Sheet 5: Training Topics
-  const trainingData = memberTraining.map((tr) => ({
-    Month: tr.date.slice(0, 7),
-    Week: getWeekOrdinal(getWeekOfMonth(tr.date)),
-    'Topic / Session': tr.name,
-    Trainer: tr.trainerName || '-',
-    'Co-Trainer':
-      (tr.coTrainerNames && tr.coTrainerNames.length > 0
-        ? tr.coTrainerNames
-        : tr.attendeeNames || []
-      ).join(', ') || '-',
-    Date: tr.date,
-    Start: tr.start,
-    End: tr.end,
-    'Break (hrs)': tr.breakHrs,
-    'Hours': tr.calculatedHours,
-    Location: tr.location || '-',
-    'Edited By': tr.editedBy ? `${tr.editedBy} (${tr.editedAt || ''})` : '-',
-  }));
+  const trainingData = memberTraining.map((tr) => {
+    const entries = getTrainerEntriesForLog(tr);
+    const subTopicSummary =
+      entries
+        .map((e) =>
+          e.topic
+            ? `${e.name} (${e.topic}: ${formatBreakDuration(e.hours)})`
+            : `${e.name} (${formatBreakDuration(e.hours)})`
+        )
+        .join('; ') || '-';
+
+    return {
+      Month: tr.date.slice(0, 7),
+      Week: getWeekOrdinal(getWeekOfMonth(tr.date)),
+      'Main Topic': tr.name,
+      'Trainer · Sub-Topic · Time': subTopicSummary,
+      Trainer: tr.trainerName || '-',
+      'Co-Trainer':
+        (tr.coTrainerNames && tr.coTrainerNames.length > 0
+          ? tr.coTrainerNames
+          : tr.attendeeNames || []
+        ).join(', ') || '-',
+      Date: tr.date,
+      Start: tr.start,
+      End: tr.end,
+      Break: formatBreakDuration(tr.breakHrs),
+      'My Hours': getMemberHoursForTrainingLog(tr, member),
+      Location: tr.location || '-',
+      'Edited By': tr.editedBy ? `${tr.editedBy} (${tr.editedAt || ''})` : '-',
+    };
+  });
   const wsTraining = XLSX.utils.json_to_sheet(
     trainingData.length > 0
       ? trainingData
@@ -208,7 +221,8 @@ export function exportMemberMonthlyExcel(params: {
   wsTraining['!cols'] = [
     { wch: 10 },
     { wch: 11 },
-    { wch: 36 },
+    { wch: 30 },
+    { wch: 40 },
     { wch: 20 },
     { wch: 24 },
     { wch: 12 },
@@ -258,8 +272,7 @@ export function exportAllMembersMonthlyExcel(params: {
         Month: monthKey,
         'Working Days': summary.workingDaysInMonth,
         'Office Attendance Days (ရုံးတက်ရက်)': summary.officePresentDays,
-        'Approved Leave Days (ခွင့်ရက်)': summary.approvedLeaveDaysInMonth,
-        'Pending Leave Days': summary.pendingLeaveDaysInMonth,
+        'Leave Days (ခွင့်ရက်)': summary.approvedLeaveDaysInMonth,
         'Training Hours (Month)': Number(summary.trainingHoursInMonth.toFixed(1)),
         'Total Tasks': uTasks.length,
         'Completed Tasks': uTasks.filter((t) => t.status === 'Completed').length,

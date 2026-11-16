@@ -6,22 +6,21 @@ import { isAdminOrSuper, canApproveTaskCompletion } from '../utils/roleHelpers';
 import {
   FolderKanban,
   Plus,
-  Calendar,
   X,
   Check,
   Edit3,
   Trash2,
-  Users,
-  UserCheck,
   MessageSquare,
   BellRing,
   ShieldCheck,
-  Clock4,
-  CheckSquare,
   Eye,
   Lock,
   Unlock,
   Layers,
+  CheckCircle2,
+  XCircle,
+  Clock4,
+  Send,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -35,6 +34,13 @@ interface ProjectsTabProps {
   onAddProject: (proj: Partial<StrategicProject>) => void;
   onUpdateProject: (proj: StrategicProject) => void;
   onDeleteProject: (projectId: string) => void;
+  onRequestProjectCompletion: (projectId: string) => void;
+  onReviewProjectCompletion: (
+    projectId: string,
+    decision: 'Approved' | 'Pending' | 'Rejected'
+  ) => void;
+  onAddProjectComment: (projectId: string, text: string) => void;
+  onDeleteProjectComment: (projectId: string, commentId: string) => void;
   onSaveTask: (taskData: Partial<TaskItem>) => void;
   onDeleteTask: (taskId: string) => void;
   onOpenComments: (task: TaskItem) => void;
@@ -60,6 +66,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
   onAddProject,
   onUpdateProject,
   onDeleteProject,
+  onRequestProjectCompletion,
+  onReviewProjectCompletion,
+  onAddProjectComment,
+  onDeleteProjectComment,
   onSaveTask,
   onDeleteTask,
   onOpenComments,
@@ -83,6 +93,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
   const [filterMode, setFilterMode] = useState<'all' | 'followup' | 'my'>('all');
   const [detailProjectId, setDetailProjectId] = useState<string | null>(null);
   const [detailMemberFilter, setDetailMemberFilter] = useState<string>('all');
+  const [projectCommentText, setProjectCommentText] = useState('');
 
   // Project Create/Edit Modal State
   const [isProjModalOpen, setIsProjModalOpen] = useState(false);
@@ -484,7 +495,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
         </div>
       </div>
 
-      {/* At-a-Glance Project Title, Assignees & Stage Matrix (Open to Everyone) */}
+      {/* Overall Strategic Projects Table (Click any topic to view/manage individually) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -492,14 +503,14 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
               <Layers className="w-4 h-4 text-amber-400" />
               <span>
                 {language === 'my'
-                  ? 'ခေါင်းစဉ်တစ်ခုချင်းစီအလိုက် တာဝန်ပေးထားသူနှင့် ရောက်ရှိနေသည့်အဆင့် ဇယား'
-                  : 'Project Titles — Assignees, Current Stage & Deadline Overview'}
+                  ? 'Strategic Planning — Overall & ခေါင်းစဉ်တစ်ခုချင်းစီ စာရင်း'
+                  : 'Strategic Planning — Overall Overview & Topic List'}
               </span>
             </h3>
             <p className="text-[11px] text-slate-300 mt-0.5">
               {language === 'my'
-                ? 'ခေါင်းစဉ်ကို နှိပ်၍ Project အသေးစိတ်နှင့် Task အဆင့်များကို လူတိုင်း ဝင်ကြည့်နိုင်ပါသည်'
-                : 'Click any project title to inspect full stage progress, task breakdown, and follow-up history'}
+                ? 'Overall အခြေအနေကို ကြည့်ရှုနိုင်ပြီး ခေါင်းစဉ်တစ်ခုချင်းစီကို နှိပ်၍ အသေးစိတ် ဝင်ကြည့်နိုင်ပါသည်'
+                : 'Overall summary view — click any topic row to open and manage that topic individually'}
             </p>
           </div>
         </div>
@@ -508,8 +519,8 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-extrabold">
               <tr>
-                <th className="p-3.5 min-w-[210px]">
-                  {language === 'my' ? 'Project ခေါင်းစဉ်' : 'Project Title'}
+                <th className="p-3.5 min-w-[220px]">
+                  {language === 'my' ? 'Topic / Project ခေါင်းစဉ်' : 'Topic / Project Title'}
                 </th>
                 <th className="p-3.5 min-w-[190px]">
                   {language === 'my' ? 'တာဝန်ပေးထားသူ (Assign / Co-Assign)' : 'Assigned To'}
@@ -517,400 +528,305 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                 <th className="p-3.5 min-w-[200px]">
                   {language === 'my' ? 'ရောက်ရှိနေသည့်အဆင့် (Stage)' : 'Current Stage & Progress'}
                 </th>
-                <th className="p-3.5 min-w-[165px]">
+                <th className="p-3.5 min-w-[175px]">
                   {language === 'my' ? 'Deadline Setup' : 'Deadline Setup'}
                 </th>
-                <th className="p-3.5 text-center">
-                  {language === 'my' ? 'ကြည့်ရှုရန်' : 'Details'}
+                <th className="p-3.5 text-center whitespace-nowrap">
+                  {language === 'my' ? 'Topic ဝင်ကြည့်ရန်' : 'Open Topic'}
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProjects.map((proj) => {
-                const pTasks = tasks.filter((item) => item.projectId === proj.id);
-                const completedCount = pTasks.filter((tk) => tk.status === 'Completed').length;
-                const pct =
-                  pTasks.length > 0
-                    ? Math.round((completedCount / pTasks.length) * 100)
-                    : proj.progress;
-                const stageIdx = Math.max(0, PROJECT_STAGES.indexOf(proj.status));
-                const ownerUser = allUsers.find(
-                  (u) => u.id === proj.ownerId || u.name === proj.ownerName
-                );
+              {filteredProjects.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-10 text-center text-xs text-slate-400">
+                    {language === 'my'
+                      ? 'ကိုက်ညီသော စီမံကိန်း မရှိပါ။'
+                      : 'No strategic projects match the selected filter.'}
+                  </td>
+                </tr>
+              ) : (
+                filteredProjects.map((proj) => {
+                  const pTasks = tasks.filter((item) => item.projectId === proj.id);
+                  const completedCount = pTasks.filter((tk) => tk.status === 'Completed').length;
+                  const pct =
+                    pTasks.length > 0
+                      ? Math.round((completedCount / pTasks.length) * 100)
+                      : proj.progress;
+                  const stageIdx = Math.max(0, PROJECT_STAGES.indexOf(proj.status));
+                  const ownerUser = allUsers.find(
+                    (u) => u.id === proj.ownerId || u.name === proj.ownerName
+                  );
+                  const deadlineBadge = getDeadlineBadge(proj.deadline, proj.status === 'Completed');
 
-                return (
-                  <tr key={proj.id} className="hover:bg-slate-50/80 transition">
-                    <td className="p-3.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailMemberFilter('all');
-                          setDetailProjectId(proj.id);
-                        }}
-                        className="font-extrabold text-slate-900 hover:text-blue-600 hover:underline text-left block"
-                      >
-                        {proj.title}
-                      </button>
-                      <span className="text-[10px] text-slate-500">
-                        {pTasks.length} {language === 'my' ? 'tasks' : 'tasks'}
-                        {proj.followupDate ? ` · Follow-up: ${proj.followupDate}` : ''}
-                      </span>
-                    </td>
-
-                    <td className="p-3.5">
-                      <div className="flex items-center gap-2">
-                        {ownerUser && (
-                          <img
-                            src={ownerUser.avatar}
-                            alt={proj.ownerName}
-                            referrerPolicy="no-referrer"
-                            className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => ownerUser && onOpenMemberSheet(ownerUser)}
-                            className="font-bold text-slate-900 hover:text-blue-600 hover:underline block truncate"
-                          >
-                            {proj.ownerName}
-                          </button>
-                          {proj.coAssigneeNames && proj.coAssigneeNames.length > 0 && (
-                            <span className="text-[10px] text-indigo-700 font-semibold block truncate">
-                              Co: {proj.coAssigneeNames.join(', ')}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="p-3.5">
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          {!isViewer ? (
-                            <select
-                              value={proj.status}
-                              onChange={(e) =>
-                                onUpdateProject({
-                                  ...proj,
-                                  status: e.target.value as StrategicProject['status'],
-                                  progress:
-                                    e.target.value === 'Completed'
-                                      ? 100
-                                      : proj.progress,
-                                })
-                              }
-                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none ${
-                                proj.status === 'Completed'
-                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                  : proj.status === 'Final Review'
-                                  ? 'bg-purple-100 text-purple-800 border-purple-200'
-                                  : proj.status === 'On Track'
-                                  ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                  : 'bg-amber-100 text-amber-800 border-amber-200'
-                              }`}
-                            >
-                              {PROJECT_STAGES.map((st) => (
-                                <option key={st} value={st}>
-                                  {st}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span
-                              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                                proj.status === 'Completed'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : proj.status === 'Final Review'
-                                  ? 'bg-purple-100 text-purple-800'
-                                  : proj.status === 'On Track'
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {proj.status}
-                            </span>
-                          )}
-                          <span className="text-[11px] font-black text-blue-700 tabular-nums">
-                            {pct}%
-                          </span>
-                        </div>
-
-                        {/* 4-Step Stage Indicator */}
-                        <div className="grid grid-cols-4 gap-1">
-                          {PROJECT_STAGES.map((st, idx) => (
-                            <div
-                              key={st}
-                              title={st}
-                              className={`h-1.5 rounded-full ${
-                                idx <= stageIdx
-                                  ? proj.status === 'Completed'
-                                    ? 'bg-emerald-500'
-                                    : 'bg-blue-600'
-                                  : 'bg-slate-200'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="p-3.5">
-                      {canSetupDeadline ? (
-                        <input
-                          type="date"
-                          value={proj.deadline}
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              onUpdateProject({ ...proj, deadline: e.target.value });
-                            }
-                          }}
-                          className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 tabular-nums"
-                        />
-                      ) : (
-                        <span className="font-bold text-slate-800 tabular-nums">
-                          {proj.deadline}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="p-3.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailMemberFilter('all');
-                          setDetailProjectId(proj.id);
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>{language === 'my' ? 'ဝင်ကြည့်ရန်' : 'Open'}</span>
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Projects Workspace List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {filteredProjects.length === 0 ? (
-          <div className="lg:col-span-2 bg-white p-10 rounded-2xl border border-slate-200 text-center text-xs text-slate-400">
-            {language === 'my'
-              ? 'ကိုက်ညီသော စီမံကိန်း မရှိပါ။'
-              : 'No strategic projects match the selected filter.'}
-          </div>
-        ) : (
-          filteredProjects.map((proj) => {
-            const pTasks = tasks.filter((item) => item.projectId === proj.id);
-            const completedTasksCount = pTasks.filter((tk) => tk.status === 'Completed').length;
-            const computedProgress =
-              pTasks.length > 0
-                ? Math.round((completedTasksCount / pTasks.length) * 100)
-                : proj.progress;
-            const deadlineBadge = getDeadlineBadge(proj.deadline, proj.status === 'Completed');
-            const isFollowDue =
-              proj.status !== 'Completed' && proj.followupDate && proj.followupDate <= todayStr;
-
-            return (
-              <div
-                key={proj.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col overflow-hidden"
-              >
-                {/* Project Card Header */}
-                <div className="p-5 space-y-3 border-b border-slate-100">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full ${
-                          proj.status === 'Completed'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : proj.status === 'Final Review'
-                            ? 'bg-purple-100 text-purple-800'
-                            : proj.status === 'On Track'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {proj.status}
-                      </span>
-                      {canSetupDeadline ? (
-                        <label className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800">
-                          <Calendar className="w-3 h-3 text-blue-600" />
-                          <span>Deadline:</span>
-                          <input
-                            type="date"
-                            value={proj.deadline}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                onUpdateProject({ ...proj, deadline: e.target.value });
-                              }
-                            }}
-                            className="bg-transparent font-bold text-slate-900 focus:outline-none tabular-nums"
-                          />
-                        </label>
-                      ) : (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded tabular-nums inline-flex items-center gap-1 ${deadlineBadge.cls}`}>
-                          <Calendar className="w-3 h-3" />
-                          Deadline: {proj.deadline}
-                        </span>
-                      )}
-                      {proj.followupDate && (
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded tabular-nums inline-flex items-center gap-1 ${
-                            isFollowDue
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                              : 'bg-indigo-50 text-indigo-800'
-                          }`}
-                        >
-                          <Clock4 className="w-3 h-3" />
-                          Follow-up: {proj.followupDate}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDetailMemberFilter('all');
-                          setDetailProjectId(proj.id);
-                        }}
-                        className="p-1.5 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                        title={language === 'my' ? 'Project နှင့် Task များ ဝင်ကြည့်ရန်' : 'Open project & view tasks'}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                      </button>
-                      {!isViewer && (
-                        <button
-                          type="button"
-                          onClick={() => openEditProjectModal(proj)}
-                          className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
-                          title={language === 'my' ? 'Project & Deadline ပြင်ရန်' : 'Edit project & assignees'}
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => setProjectToDelete(proj)}
-                          className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
-                          title={language === 'my' ? 'Project ဖျက်ရန်' : 'Delete project'}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <button
-                      type="button"
+                  return (
+                    <tr
+                      key={proj.id}
                       onClick={() => {
                         setDetailMemberFilter('all');
                         setDetailProjectId(proj.id);
                       }}
-                      className="text-sm font-extrabold text-slate-900 hover:text-blue-600 hover:underline leading-snug text-left"
+                      className="hover:bg-blue-50/40 transition cursor-pointer"
                     >
-                      {proj.title}
-                    </button>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      {proj.deliverables}
-                    </p>
-                    {proj.followupNote && (
-                      <p className="text-[11px] text-indigo-700 bg-indigo-50/70 border border-indigo-100 rounded-lg px-2.5 py-1.5 mt-2 font-medium">
-                        Follow-up Note: {proj.followupNote}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Assign & Co-Assign Row */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] pt-1">
-                    <div className="flex items-center gap-1 text-slate-700">
-                      <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="font-semibold text-slate-500">Assign:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const found = allUsers.find(
-                            (u) => u.id === proj.ownerId || u.name === proj.ownerName
-                          );
-                          if (found) onOpenMemberSheet(found);
-                        }}
-                        className="font-bold text-slate-900 hover:text-blue-600 hover:underline"
-                      >
-                        {proj.ownerName}
-                      </button>
-                    </div>
-
-                    {proj.coAssigneeNames && proj.coAssigneeNames.length > 0 && (
-                      <div className="flex items-center gap-1 text-slate-700 flex-wrap">
-                        <Users className="w-3.5 h-3.5 text-indigo-600" />
-                        <span className="font-semibold text-slate-500">Co-Assign:</span>
-                        <span className="font-bold text-indigo-800">
-                          {proj.coAssigneeNames.join(', ')}
+                      <td className="p-3.5">
+                        <span className="font-extrabold text-slate-900 hover:text-blue-600 hover:underline block">
+                          {proj.title}
                         </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                      <span>
-                        {language === 'my' ? 'တိုးတက်မှု' : 'Progress'}{' '}
-                        {pTasks.length > 0 && (
-                          <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
-                            ({completedTasksCount}/{pTasks.length} tasks)
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px] text-slate-500">
+                          <span>
+                            {pTasks.length} tasks
+                            {proj.followupDate ? ` · Follow-up: ${proj.followupDate}` : ''}
                           </span>
-                        )}
-                      </span>
-                      <span className="text-blue-600 tabular-nums">{computedProgress}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${computedProgress}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 font-bold border border-blue-200">
+                            <MessageSquare className="w-2.5 h-2.5" />
+                            {proj.comments?.length || 0}
+                          </span>
+                        </div>
+                      </td>
 
-                {/* Clean Project Card Footer — Click to view Tasks & Who's Doing What */}
-                <div className="bg-slate-50/80 px-5 py-3 flex items-center justify-between gap-3">
-                  <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5 tabular-nums">
-                    <CheckSquare className="w-4 h-4 text-blue-600" />
-                    <span>
-                      {language === 'my'
-                        ? `ပါဝင်သော Task များ: ${pTasks.length} ခု`
-                        : `${pTasks.length} Tasks inside`}
-                    </span>
-                  </span>
+                      <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2">
+                          {ownerUser && (
+                            <img
+                              src={ownerUser.avatar}
+                              alt={proj.ownerName}
+                              referrerPolicy="no-referrer"
+                              className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => ownerUser && onOpenMemberSheet(ownerUser)}
+                              className="font-bold text-slate-900 hover:text-blue-600 hover:underline block truncate"
+                            >
+                              {proj.ownerName}
+                            </button>
+                            {proj.coAssigneeNames && proj.coAssigneeNames.length > 0 && (
+                              <span className="text-[10px] text-indigo-700 font-semibold block truncate">
+                                Co: {proj.coAssigneeNames.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDetailMemberFilter('all');
-                      setDetailProjectId(proj.id);
-                    }}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>
-                      {language === 'my'
-                        ? 'ဝင်ကြည့်ရန် & Task များပြင်ရန်'
-                        : 'Open Project & Edit Tasks'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
+                      <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            {!isViewer ? (
+                              <select
+                                value={proj.status}
+                                onChange={(e) => {
+                                  const nextSt = e.target.value as StrategicProject['status'];
+                                  if (nextSt === 'Completed' && !isAdmin) {
+                                    onRequestProjectCompletion(proj.id);
+                                    return;
+                                  }
+                                  onUpdateProject({
+                                    ...proj,
+                                    status: nextSt,
+                                    progress: nextSt === 'Completed' ? 100 : proj.progress,
+                                  });
+                                }}
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border cursor-pointer focus:outline-none ${
+                                  proj.status === 'Completed'
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                                    : proj.status === 'Final Review'
+                                    ? 'bg-purple-100 text-purple-800 border-purple-200'
+                                    : proj.status === 'On Track'
+                                    ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                    : 'bg-amber-100 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                {PROJECT_STAGES.map((st) => (
+                                  <option key={st} value={st}>
+                                    {st === 'Completed' && !isAdmin
+                                      ? language === 'my'
+                                        ? 'Completed (Approval တောင်းရန်)'
+                                        : 'Completed (Request Approval)'
+                                      : st}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                                  proj.status === 'Completed'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : proj.status === 'Final Review'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : proj.status === 'On Track'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {proj.status}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-black text-blue-700 tabular-nums">
+                              {pct}%
+                            </span>
+                          </div>
+
+                          {/* 4-Step Stage Indicator */}
+                          <div className="grid grid-cols-4 gap-1">
+                            {PROJECT_STAGES.map((st, idx) => (
+                              <div
+                                key={st}
+                                title={st}
+                                className={`h-1.5 rounded-full ${
+                                  idx <= stageIdx
+                                    ? proj.status === 'Completed'
+                                      ? 'bg-emerald-500'
+                                      : 'bg-blue-600'
+                                    : 'bg-slate-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+
+                          {/* Completion Approval Status Pill & Admin Review Actions */}
+                          {(proj.completionRequested || proj.completionStatus) && (
+                            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                              {proj.completionStatus === 'Pending' || proj.completionRequested ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-extrabold">
+                                  <Clock4 className="w-2.5 h-2.5" />
+                                  <span>
+                                    {language === 'my'
+                                      ? 'Approval စောင့်ဆိုင်းဆဲ (Pending)'
+                                      : 'Completion Pending'}
+                                  </span>
+                                </span>
+                              ) : proj.completionStatus === 'Rejected' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-300 text-[9px] font-extrabold">
+                                  <XCircle className="w-2.5 h-2.5" />
+                                  <span>
+                                    {language === 'my' ? 'ငြင်းပယ်ထားသည် (Rejected)' : 'Rejected'}
+                                  </span>
+                                </span>
+                              ) : proj.completionStatus === 'Approved' ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[9px] font-extrabold">
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  <span>
+                                    {language === 'my' ? 'Approved' : 'Approved'}
+                                  </span>
+                                </span>
+                              ) : null}
+
+                              {isAdmin && (proj.completionRequested || proj.completionStatus === 'Pending') && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => onReviewProjectCompletion(proj.id, 'Approved')}
+                                    className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-bold"
+                                    title="Approve Completion"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onReviewProjectCompletion(proj.id, 'Pending')}
+                                    className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-600 text-white rounded text-[9px] font-bold"
+                                    title="Keep Pending"
+                                  >
+                                    Pending
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onReviewProjectCompletion(proj.id, 'Rejected')}
+                                    className="px-1.5 py-0.5 bg-red-600 hover:bg-red-700 text-white rounded text-[9px] font-bold"
+                                    title="Reject Completion"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {!isViewer && !isAdmin && proj.status !== 'Completed' && !proj.completionRequested && (
+                            <button
+                              type="button"
+                              onClick={() => onRequestProjectCompletion(proj.id)}
+                              className="text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-0.5 rounded-md transition"
+                            >
+                              {language === 'my'
+                                ? 'Complete Approval တောင်းရန်'
+                                : 'Request Complete Approval'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col items-start gap-1">
+                          {canSetupDeadline ? (
+                            <input
+                              type="date"
+                              value={proj.deadline}
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  onUpdateProject({ ...proj, deadline: e.target.value });
+                                }
+                              }}
+                              className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 tabular-nums"
+                            />
+                          ) : (
+                            <span className="font-bold text-slate-800 tabular-nums">
+                              {proj.deadline}
+                            </span>
+                          )}
+                          {(proj.status === 'Completed' || proj.deadline <= todayStr) && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${deadlineBadge.cls}`}>
+                              {deadlineBadge.text}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="p-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDetailMemberFilter('all');
+                              setDetailProjectId(proj.id);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>{language === 'my' ? 'ဝင်ကြည့်ရန်' : 'Open'}</span>
+                          </button>
+                          {!isViewer && (
+                            <button
+                              type="button"
+                              onClick={() => openEditProjectModal(proj)}
+                              className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition"
+                              title={language === 'my' ? 'Project ပြင်ရန်' : 'Edit project'}
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => setProjectToDelete(proj)}
+                              className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition"
+                              title={language === 'my' ? 'Project ဖျက်ရန်' : 'Delete project'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal 1: Launch / Edit Strategic Project */}
@@ -1480,6 +1396,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                                 value={detailProject.status}
                                 onChange={(e) => {
                                   const nextSt = e.target.value as StrategicProject['status'];
+                                  if (nextSt === 'Completed' && !isAdmin) {
+                                    onRequestProjectCompletion(detailProject.id);
+                                    return;
+                                  }
                                   onUpdateProject({
                                     ...detailProject,
                                     status: nextSt,
@@ -1498,7 +1418,11 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                               >
                                 {PROJECT_STAGES.map((st) => (
                                   <option key={st} value={st}>
-                                    {st} — {getStageLabelMy(st)}
+                                    {st === 'Completed' && !isAdmin
+                                      ? language === 'my'
+                                        ? 'Completed (Approval တောင်းရန်)'
+                                        : 'Completed (Request Approval)'
+                                      : `${st} — ${getStageLabelMy(st)}`}
                                   </option>
                                 ))}
                               </select>
@@ -1525,6 +1449,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                             disabled={isViewer}
                             onClick={() => {
                               if (!isViewer) {
+                                if (st === 'Completed' && !isAdmin) {
+                                  onRequestProjectCompletion(detailProject.id);
+                                  return;
+                                }
                                 onUpdateProject({
                                   ...detailProject,
                                   status: st,
@@ -1560,6 +1488,111 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                         );
                       })}
                     </div>
+                  </div>
+                </div>
+
+                {/* Project Completion Approval Bar (Member Request + Admin/Super Admin Approve / Pending / Reject) */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-slate-900">
+                      <ShieldCheck className="w-4 h-4 text-purple-600" />
+                      <span>
+                        {language === 'my'
+                          ? 'Project Complete ဖြစ်/မဖြစ် Approval စီမံခန့်ခွဲမှု (Admin / Super Admin)'
+                          : 'Project Completion Approval Control'}
+                      </span>
+                      {detailProject.completionStatus === 'Pending' || detailProject.completionRequested ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px]">
+                          {language === 'my' ? 'Pending (အတည်ပြုရန် စောင့်ဆိုင်းဆဲ)' : 'Pending Approval'}
+                        </span>
+                      ) : detailProject.completionStatus === 'Approved' || detailProject.status === 'Completed' ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px]">
+                          {language === 'my' ? 'Approved (ပြီးစီးကြောင်း အတည်ပြုပြီး)' : 'Approved'}
+                        </span>
+                      ) : detailProject.completionStatus === 'Rejected' ? (
+                        <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 border border-red-300 text-[10px]">
+                          {language === 'my' ? 'Rejected (ငြင်းပယ်ထားသည်)' : 'Rejected'}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      {detailProject.completionApprovedBy
+                        ? `${
+                            detailProject.completionStatus === 'Rejected'
+                              ? language === 'my'
+                                ? 'ငြင်းပယ်သူ:'
+                                : 'Rejected by'
+                              : detailProject.completionStatus === 'Pending'
+                              ? language === 'my'
+                                ? 'Pending ထားသူ:'
+                                : 'Marked Pending by'
+                              : language === 'my'
+                              ? 'အတည်ပြုသူ:'
+                              : 'Approved by'
+                          } ${detailProject.completionApprovedBy} (${detailProject.completionApprovedAt || ''})`
+                        : detailProject.completionRequestedBy
+                        ? language === 'my'
+                          ? `Approval တောင်းခံသူ: ${detailProject.completionRequestedBy} (${detailProject.completionRequestedAt || ''})`
+                          : `Requested by ${detailProject.completionRequestedBy}`
+                        : language === 'my'
+                        ? 'Project ပြီးစီးပါက Admin / Super Admin ထံ Approval တောင်းခံရပါမည်။'
+                        : 'Submit completion request for Admin / Super Admin to Approve, Pending, or Reject.'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isViewer && !isAdmin && detailProject.status !== 'Completed' && (
+                      <button
+                        type="button"
+                        onClick={() => onRequestProjectCompletion(detailProject.id)}
+                        disabled={Boolean(detailProject.completionRequested)}
+                        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-xs ${
+                          detailProject.completionRequested
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-default'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
+                      >
+                        <Clock4 className="w-3.5 h-3.5" />
+                        <span>
+                          {detailProject.completionRequested
+                            ? language === 'my'
+                              ? 'Approval တောင်းခံပြီး (Pending)'
+                              : 'Approval Requested (Pending)'
+                            : language === 'my'
+                            ? 'Complete Approval တောင်းခံရန်'
+                            : 'Request Completion Approval'}
+                        </span>
+                      </button>
+                    )}
+
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onReviewProjectCompletion(detailProject.id, 'Approved')}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{language === 'my' ? 'Approve (Complete)' : 'Approve'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onReviewProjectCompletion(detailProject.id, 'Pending')}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow-xs transition"
+                        >
+                          <Clock4 className="w-3.5 h-3.5" />
+                          <span>{language === 'my' ? 'Pending ထားမည်' : 'Pending'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onReviewProjectCompletion(detailProject.id, 'Rejected')}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-xs transition"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>{language === 'my' ? 'Reject (ငြင်းပယ်)' : 'Reject'}</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -1886,6 +1919,114 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                       </table>
                     </div>
                   )}
+                </div>
+
+                {/* 3. Project Comments & Admin Review Discussion */}
+                <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
+                  <div className="px-4 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
+                    <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <MessageSquare className="w-4 h-4 text-blue-600" />
+                      <span>
+                        {language === 'my'
+                          ? `Project မှတ်ချက်များနှင့် Admin Review Comments (${detailProject.comments?.length || 0})`
+                          : `Project Discussion & Review Comments (${detailProject.comments?.length || 0})`}
+                      </span>
+                    </h4>
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    {(!detailProject.comments || detailProject.comments.length === 0) ? (
+                      <p className="text-xs text-slate-400 italic text-center py-3">
+                        {language === 'my'
+                          ? 'Project အတွက် မှတ်ချက် မရှိသေးပါ — Admin / Super Admin နှင့် အဖွဲ့ဝင်များ ဤနေရာတွင် Comment ရေးသားနိုင်ပါသည်'
+                          : 'No project comments yet. Admin, Super Admin, and team members can post comments here.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                        {detailProject.comments.map((cmt) => {
+                          const canDeleteComment =
+                            !isViewer &&
+                            (cmt.authorId === currentUser.id || isAdmin);
+                          const authorUser = allUsers.find((u) => u.id === cmt.authorId);
+                          return (
+                            <div
+                              key={cmt.id}
+                              className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs"
+                            >
+                              <img
+                                src={cmt.authorAvatar}
+                                alt={cmt.authorName}
+                                referrerPolicy="no-referrer"
+                                className="w-7 h-7 rounded-full object-cover border border-slate-300 shrink-0 mt-0.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-extrabold text-slate-900">
+                                      {cmt.authorName}
+                                    </span>
+                                    {authorUser && isAdminOrSuper(authorUser.roleTier) && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                        {authorUser.roleTier === 'SUPER_ADMIN' ? 'Super Admin' : 'Admin'}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] text-slate-400 tabular-nums">
+                                      {cmt.timestamp}
+                                    </span>
+                                  </div>
+                                  {canDeleteComment && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteProjectComment(detailProject.id, cmt.id)}
+                                      className="text-slate-400 hover:text-red-600 p-0.5 rounded transition"
+                                      title="Delete comment"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                                <p className="text-slate-700 mt-1 whitespace-pre-wrap leading-relaxed">
+                                  {cmt.text}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!isViewer && (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!projectCommentText.trim()) return;
+                          onAddProjectComment(detailProject.id, projectCommentText.trim());
+                          setProjectCommentText('');
+                        }}
+                        className="flex items-center gap-2 pt-2 border-t border-slate-100"
+                      >
+                        <input
+                          type="text"
+                          value={projectCommentText}
+                          onChange={(e) => setProjectCommentText(e.target.value)}
+                          placeholder={
+                            language === 'my'
+                              ? 'Project အတွက် မှတ်ချက် / Feedback ရေးရန်...'
+                              : 'Write a project comment or review note...'
+                          }
+                          className="flex-1 text-xs px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!projectCommentText.trim()}
+                          className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl shadow-xs transition"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{language === 'my' ? 'ပေးပို့မည်' : 'Comment'}</span>
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

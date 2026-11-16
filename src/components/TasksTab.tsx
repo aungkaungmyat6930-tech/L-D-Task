@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TaskItem, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { isAdminOrSuper, canApproveTaskCompletion } from '../utils/roleHelpers';
+import { isTaskOverdue, isTaskNearDeadline, formatDeadlineNotiLabel } from '../utils/taskHelpers';
 import {
   CheckSquare,
   MessageSquare,
@@ -12,6 +13,7 @@ import {
   RotateCcw,
   Users,
   Clock,
+  Bell,
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 
@@ -20,7 +22,7 @@ interface TasksTabProps {
   currentUser: UserProfile;
   allUsers: UserProfile[];
   filterRequest?: {
-    filter: 'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed';
+    filter: 'all' | 'my' | 'overdue' | 'due-soon' | 'active' | 'pending' | 'completed';
     key: number;
   } | null;
   onGoToDirectory: () => void;
@@ -47,7 +49,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
 }) => {
   const t = TRANSLATIONS[language];
   const [filter, setFilter] = useState<
-    'all' | 'my' | 'overdue' | 'active' | 'pending' | 'completed'
+    'all' | 'my' | 'overdue' | 'due-soon' | 'active' | 'pending' | 'completed'
   >('all');
   const [search, setSearch] = useState('');
   const [taskToDelete, setTaskToDelete] = useState<TaskItem | null>(null);
@@ -61,6 +63,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
   const isAdmin = isAdminOrSuper(currentUser.roleTier);
   const canApproveComplete = canApproveTaskCompletion(currentUser.roleTier);
   const isViewer = currentUser.roleTier === 'VIEWER';
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const isPendingTask = (task: TaskItem) =>
     task.status === 'Pending' || task.status === 'Waiting';
@@ -71,7 +74,9 @@ export const TasksTab: React.FC<TasksTabProps> = ({
       const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
       if (!isMyTask) return false;
     } else if (filter === 'overdue') {
-      if (task.status !== 'Overdue') return false;
+      if (!isTaskOverdue(task, todayStr)) return false;
+    } else if (filter === 'due-soon') {
+      if (!isTaskNearDeadline(task, todayStr)) return false;
     } else if (filter === 'active') {
       if (task.status !== 'Active') return false;
     } else if (filter === 'pending') {
@@ -148,7 +153,21 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 : 'text-red-700 hover:bg-red-50'
             }`}
           >
-            {t.overdue} ({tasks.filter((t) => t.status === 'Overdue').length})
+            {t.overdue} ({tasks.filter((t) => isTaskOverdue(t, todayStr)).length})
+          </button>
+          <button
+            onClick={() => setFilter('due-soon')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition inline-flex items-center gap-1 ${
+              filter === 'due-soon'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-amber-800 hover:bg-amber-50'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>
+              {language === 'my' ? 'Deadline နီး' : 'Due Soon'} (
+              {tasks.filter((t) => isTaskNearDeadline(t, todayStr)).length})
+            </span>
           </button>
           <button
             onClick={() => setFilter('active')}
@@ -219,7 +238,8 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                 </tr>
               ) : (
                 filteredTasks.map((task) => {
-                  const isOverdue = task.status === 'Overdue';
+                  const isOverdue = isTaskOverdue(task, todayStr);
+                  const nearLabel = formatDeadlineNotiLabel(task, todayStr, language);
                   const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
                   const canEdit = (isMyTask || isAdmin) && !isViewer;
                   const displayStatus =
@@ -233,7 +253,7 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                     <tr
                       key={task.id}
                       className={`hover:bg-slate-50/80 transition-colors ${
-                        isOverdue ? 'bg-red-50/20' : isMyTask ? 'bg-blue-50/20' : ''
+                        isOverdue ? 'bg-red-50/20' : nearLabel ? 'bg-amber-50/20' : isMyTask ? 'bg-blue-50/20' : ''
                       }`}
                     >
                       <td className="py-3.5 px-4 font-bold text-slate-900 max-w-sm">
@@ -262,7 +282,13 @@ export const TasksTab: React.FC<TasksTabProps> = ({
                       </td>
 
                       <td className={`py-3.5 px-4 tabular-nums ${isOverdue ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
-                        {task.due}
+                        <div>{task.due}</div>
+                        {nearLabel && (
+                          <span className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
+                            <Bell className="w-2.5 h-2.5 text-amber-700" />
+                            <span>{nearLabel}</span>
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 tabular-nums text-slate-600">
