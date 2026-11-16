@@ -808,7 +808,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
       case 'Leave':
         return {
           label: language === 'my' ? 'ခွင့် (Leave)' : 'Leave',
-          cls: 'bg-teal-100 text-teal-800 border border-teal-200',
+          cls: 'bg-red-600 text-white border border-red-700',
         };
       case 'Unmarked':
         return {
@@ -829,7 +829,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         key={row.date}
         className={`rounded-lg border px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2.5 text-xs ${
           row.status === 'Leave'
-            ? 'bg-teal-50/40 border-teal-200/80'
+            ? 'bg-red-50 border-red-300'
             : row.status === 'Office'
             ? 'bg-emerald-50/20 border-emerald-200/80'
             : 'bg-white border-slate-200/90'
@@ -844,7 +844,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             {badge.label}
           </span>
           {row.leave && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-100/80 text-teal-900 border border-teal-200 text-[10px] font-bold tabular-nums">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-100/80 text-red-900 border border-red-200 text-[10px] font-bold tabular-nums">
               {getShortLeaveTypeLabel(row.leave.type, language)} · {row.leave.duration}d ({row.leave.start.slice(5)}~{row.leave.end.slice(5)})
               {row.leave.hrRefId ? ` · ${row.leave.hrRefId}` : ''}
             </span>
@@ -856,9 +856,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   key={att.id}
                   type="button"
                   onClick={() => setPreviewAttachment(att)}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white hover:bg-teal-50 text-slate-700 border border-slate-200 text-[10px] font-semibold"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white hover:bg-red-50 text-slate-700 border border-slate-200 text-[10px] font-semibold"
                 >
-                  <FileText className="w-3 h-3 text-teal-700" />
+                  <FileText className="w-3 h-3 text-red-700" />
                   <span className="truncate max-w-[70px]">{att.name}</span>
                 </button>
               ))}
@@ -964,14 +964,14 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
             </div>
 
             {approvedLeavesInMonth.length > 0 && (
-              <div className="bg-teal-50/70 border border-teal-200 rounded-lg p-2.5 flex flex-wrap items-center gap-2 text-[11px]">
-                <span className="font-bold text-teal-900">
+              <div className="bg-red-50/70 border border-red-200 rounded-lg p-2.5 flex flex-wrap items-center gap-2 text-[11px]">
+                <span className="font-bold text-red-900">
                   {language === 'my' ? 'Approved ခွင့်မှတ်တမ်း:' : 'Approved Leaves:'}
                 </span>
                 {approvedLeavesInMonth.map((lv) => (
                   <span
                     key={lv.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-teal-300 text-teal-900 font-bold tabular-nums"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-red-300 text-red-900 font-bold tabular-nums"
                   >
                     {lv.type} · {lv.duration}d ({lv.start} ~ {lv.end})
                   </span>
@@ -996,11 +996,11 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   {monthlyAttendance.officePresentDays}
                 </span>
               </div>
-              <div className="bg-teal-50 border border-teal-200 rounded-lg p-2.5">
-                <span className="text-[10px] font-bold text-teal-700 block">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+                <span className="text-[10px] font-bold text-red-700 block">
                   {language === 'my' ? 'ခွင့် (Leave — Approved)' : 'Leave (Approved)'}
                 </span>
-                <span className="text-lg font-black text-teal-900 tabular-nums">
+                <span className="text-lg font-black text-red-900 tabular-nums">
                   {monthlyAttendance.approvedLeaveDaysInMonth}
                 </span>
               </div>
@@ -1030,7 +1030,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                     <span className="text-emerald-700">
                       {language === 'my' ? `ရုံးတက် ${wkPresent} ရက်` : `Office: ${wkPresent}d`}
                     </span>
-                    <span className="text-teal-700">
+                    <span className="text-red-700">
                       {language === 'my' ? `ခွင့် ${wkLeave} ရက်` : `Leave: ${wkLeave}d`}
                     </span>
                   </div>
