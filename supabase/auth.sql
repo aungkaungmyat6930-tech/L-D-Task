@@ -1,8 +1,9 @@
 -- Staff login (run AFTER schema.sql, and AFTER your own email is saved on your profile in the portal).
--- 1. Only emails listed in the portal's staff list can create a login.
+-- 1. Only emails added in the Staff In/Out portal (and not Resigned) can create a login or sign in.
 -- 2. Only signed-in staff can read or change the portal data.
 
--- True when the email belongs to a staff profile (or when no staff list exists yet, for first setup).
+-- True when the email belongs to a staff profile that is not Resigned
+-- (or when no staff list exists yet, for first setup).
 create or replace function public.is_registered_email(p_email text)
 returns boolean
 language sql
@@ -18,6 +19,7 @@ as $$
            jsonb_array_elements(s.value) as u
       where s.key = 'users'
         and lower(trim(u->>'email')) = lower(trim(p_email))
+        and coalesce(u->>'status', 'Active') <> 'Resigned'
     );
 $$;
 

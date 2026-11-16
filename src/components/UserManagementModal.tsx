@@ -63,6 +63,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [dept, setDept] = useState('L&D Department');
   const [roleTier, setRoleTier] = useState<RoleTier>('MEMBER');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
   const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
   const [avatar, setAvatar] = useState(
@@ -108,12 +109,33 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
+    // Email is the staff member's login, so it is required and must be unique.
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setEmailError(
+        language === 'my'
+          ? 'Login ဝင်ရန် Email လိုအပ်ပါသည်။'
+          : 'Email is required: staff sign in with it.'
+      );
+      return;
+    }
+    const duplicate = allUsers.find((u) => u.email && u.email.trim().toLowerCase() === cleanEmail);
+    if (duplicate) {
+      setEmailError(
+        language === 'my'
+          ? `ဤ Email ကို "${duplicate.name}" အသုံးပြုပြီးဖြစ်ပါသည်။`
+          : `This email is already used by "${duplicate.name}".`
+      );
+      return;
+    }
+    setEmailError(null);
+
     onAddUser({
       name: name.trim(),
       roleLabel: roleLabel.trim() || 'L&D Officer',
       dept: dept.trim() || 'L&D Department',
       roleTier,
-      email: email.trim() || undefined,
+      email: cleanEmail,
       phone: phone.trim() || undefined,
       joinDate,
       status: 'Active',
@@ -322,15 +344,31 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email Address
+                  {language === 'my' ? 'Email (Login အတွက်)' : 'Email Address (used to sign in)'}{' '}
+                  <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="email"
+                  required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setEmailError(null);
+                  }}
                   placeholder="name@kbzlife.com.mm"
-                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className={`w-full text-xs px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    emailError ? 'border-red-400 bg-red-50' : 'border-slate-300'
+                  }`}
                 />
+                {emailError ? (
+                  <p className="mt-1 text-[11px] font-semibold text-red-600">{emailError}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {language === 'my'
+                      ? 'ဝန်ထမ်းသည် ဤ Email ဖြင့် "Create account" နှိပ်၍ Password သတ်မှတ်ပြီး ဝင်ရောက်နိုင်ပါသည်။'
+                      : 'They sign in by choosing "Create account" with this email and setting a password.'}
+                  </p>
+                )}
               </div>
 
               <div>

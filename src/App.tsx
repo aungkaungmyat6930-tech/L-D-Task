@@ -1409,7 +1409,7 @@ export default function App({ authEmail, onSignOut }: AppProps = {}) {
       roleTier: userData.roleTier || 'MEMBER',
       status: userData.status || 'Active',
       joinDate: userData.joinDate || new Date().toISOString().split('T')[0],
-      email: userData.email,
+      email: userData.email ? userData.email.trim().toLowerCase() : undefined,
       phone: userData.phone,
       avatar:
         userData.avatar ||

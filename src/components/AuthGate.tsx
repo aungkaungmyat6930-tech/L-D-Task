@@ -5,7 +5,7 @@ import { supabase, STATE_TABLE } from '../lib/supabase';
 import App from '../App';
 
 type Mode = 'signin' | 'signup' | 'forgot' | 'reset';
-type Access = 'checking' | 'allowed' | 'not-registered';
+type Access = 'checking' | 'allowed' | 'not-registered' | 'resigned';
 
 const normalize = (email: string) => email.trim().toLowerCase();
 
@@ -50,10 +50,15 @@ function SupabaseAuthGate() {
           setAccess('not-registered');
           return;
         }
-        const users: { email?: string }[] = Array.isArray(data?.value) ? data!.value : [];
+        const users: { email?: string; status?: string }[] = Array.isArray(data?.value) ? data!.value : [];
         // No staff list saved yet: first setup, let the first person in.
-        const ok = !data || users.some((u) => u.email && normalize(u.email) === normalize(email));
-        setAccess(ok ? 'allowed' : 'not-registered');
+        if (!data) {
+          setAccess('allowed');
+          return;
+        }
+        const matches = users.filter((u) => u.email && normalize(u.email) === normalize(email));
+        if (matches.some((u) => u.status !== 'Resigned')) setAccess('allowed');
+        else setAccess(matches.length ? 'resigned' : 'not-registered');
       });
   }, [session?.user.email]);
 
@@ -83,12 +88,21 @@ function SupabaseAuthGate() {
 
   if (access === 'checking') return <Splash />;
 
-  if (access === 'not-registered') {
+  if (access === 'not-registered' || access === 'resigned') {
     return (
-      <AuthCard title="No staff profile found">
+      <AuthCard title={access === 'resigned' ? 'Access ended' : 'No staff profile found'}>
         <p className="text-sm text-slate-600 mb-4">
-          <b>{session.user.email}</b> is not in the staff list. Ask an admin to add this email in User
-          Management, then sign in again.
+          {access === 'resigned' ? (
+            <>
+              <b>{session.user.email}</b> is marked as Resigned in the Staff In/Out portal, so this account can no
+              longer open the portal.
+            </>
+          ) : (
+            <>
+              <b>{session.user.email}</b> is not in the staff list. Ask an admin to add this email in the Staff
+              In/Out portal (User Management), then sign in again.
+            </>
+          )}
         </p>
         <button onClick={signOut} className={btnPrimary}>
           <LogOut className="w-4 h-4" /> Sign out
@@ -123,7 +137,7 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
           p_email: cleanEmail,
         });
         if (!checkError && registered === false) {
-          setError('This email is not in the staff list. Ask an admin to add it first.');
+          setError('This email is not an active staff email. Ask an admin to add it in the Staff In/Out portal first.');
           return;
         }
         const { data, error } = await client.auth.signUp({
