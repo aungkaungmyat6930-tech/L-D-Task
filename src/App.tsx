@@ -78,7 +78,13 @@ const STORAGE_KEYS = {
 
 const SESSION_ADMIN_UNLOCKED = 'kbz_ld_admin_unlocked_v1';
 
-export default function App() {
+interface AppProps {
+  /** Email of the signed-in staff member (Supabase Auth). Undefined when login is not configured. */
+  authEmail?: string;
+  onSignOut?: () => void;
+}
+
+export default function App({ authEmail, onSignOut }: AppProps = {}) {
   // State Initialization from LocalStorage or Defaults
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
@@ -406,6 +412,37 @@ export default function App() {
     }
   }, [cloudStatus]);
 
+  // Signed-in staff profile, matched by email.
+  const authProfile = useMemo(
+    () =>
+      authEmail
+        ? users.find((u) => u.email && u.email.trim().toLowerCase() === authEmail.trim().toLowerCase())
+        : undefined,
+    [users, authEmail]
+  );
+  const authIsAdmin = !!authProfile && isAdminOrSuper(authProfile.roleTier);
+  const canSwitchUser = !authEmail || authIsAdmin;
+  const canResetData = !authEmail || authProfile?.roleTier === 'SUPER_ADMIN';
+
+  // On sign-in, act as the signed-in person. Admins are unlocked automatically; members stay on their own profile.
+  const lastAuthProfileId = React.useRef<string | null>(null);
+  useEffect(() => {
+    if (!authProfile) return;
+    const firstMatch = lastAuthProfileId.current !== authProfile.id;
+    lastAuthProfileId.current = authProfile.id;
+    if (authIsAdmin) {
+      if (firstMatch) {
+        setIsAdminUnlocked(true);
+        try {
+          sessionStorage.setItem(SESSION_ADMIN_UNLOCKED, 'true');
+        } catch {}
+        setCurrentUser(authProfile);
+      }
+    } else if (firstMatch || currentUser?.id !== authProfile.id) {
+      setCurrentUser(authProfile);
+    }
+  }, [authProfile, authIsAdmin]);
+
   // Keep the active user in step with the user list (e.g. after edits from another browser).
   useEffect(() => {
     if (!currentUser) return;
@@ -456,6 +493,7 @@ export default function App() {
 
   // Switch Active User (Protected by Admin Password when switching to ADMIN or SUPER_ADMIN)
   const handleSwitchUser = (userId: string) => {
+    if (!canSwitchUser) return;
     const found = users.find((u) => u.id === userId);
     if (!found) return;
 
@@ -527,6 +565,7 @@ export default function App() {
 
   // Reset Data to Default
   const handleResetData = () => {
+    if (!canResetData) return;
     setIsResetConfirmOpen(true);
   };
 
@@ -1370,7 +1409,7 @@ export default function App() {
       roleTier: userData.roleTier || 'MEMBER',
       status: userData.status || 'Active',
       joinDate: userData.joinDate || new Date().toISOString().split('T')[0],
-      email: userData.email,
+      email: userData.email ? userData.email.trim().toLowerCase() : undefined,
       phone: userData.phone,
       avatar:
         userData.avatar ||
@@ -1517,6 +1556,10 @@ export default function App() {
         currentUser={currentUser}
         allUsers={users}
         onSwitchUser={handleSwitchUser}
+        canSwitchUser={canSwitchUser}
+        canResetData={canResetData}
+        authEmail={authEmail}
+        onSignOut={onSignOut}
         onOpenEditProfile={() => handleOpenEditProfile(currentUser)}
         onOpenOrgChart={() => setIsOrgChartModalOpen(true)}
         onResetData={handleResetData}

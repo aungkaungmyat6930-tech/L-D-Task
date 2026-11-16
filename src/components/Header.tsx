@@ -17,7 +17,8 @@ import {
   Bell,
   ImagePlus,
   Pencil,
-  Camera
+  Camera,
+  LogOut
 } from 'lucide-react';
 import {
   Icon3DTeamDirectory,
@@ -34,6 +35,10 @@ interface HeaderProps {
   currentUser: UserProfile;
   allUsers: UserProfile[];
   onSwitchUser: (userId: string) => void;
+  canSwitchUser?: boolean;
+  canResetData?: boolean;
+  authEmail?: string;
+  onSignOut?: () => void;
   onOpenEditProfile: () => void;
   onOpenOrgChart: () => void;
   onResetData: () => void;
@@ -56,6 +61,10 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   allUsers,
   onSwitchUser,
+  canSwitchUser = true,
+  canResetData = true,
+  authEmail,
+  onSignOut,
   onOpenEditProfile,
   onOpenOrgChart,
   onResetData,
@@ -225,6 +234,9 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-xs text-slate-300 font-medium hidden xl:inline">
               {t.activeUserContext}
             </span>
+            {!canSwitchUser ? (
+              <span className="text-white text-xs font-semibold px-2 py-1">{currentUser.name}</span>
+            ) : (
             <select
               value={currentUser.id}
               onChange={(e) => onSwitchUser(e.target.value)}
@@ -267,9 +279,11 @@ export const Header: React.FC<HeaderProps> = ({
                   ))}
               </optgroup>
             </select>
+            )}
           </div>
 
           {/* Reset Data Button */}
+          {canResetData && (
           <button
             onClick={onResetData}
             title={t.resetData}
@@ -277,6 +291,19 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+          )}
+
+          {/* Sign out (staff login) */}
+          {onSignOut && (
+            <button
+              onClick={onSignOut}
+              title={authEmail ? `Sign out (${authEmail})` : 'Sign out'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-100 bg-red-900/50 hover:bg-red-800/70 border border-red-500/40 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>{language === 'my' ? 'ထွက်ရန်' : 'Sign out'}</span>
+            </button>
+          )}
         </div>
       </div>
 
