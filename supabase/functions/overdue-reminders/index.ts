@@ -1,5 +1,7 @@
 // Supabase Edge Function: emails staff when their tasks become overdue.
-// Each overdue task is emailed once (again only if its deadline changes and it becomes overdue again).
+// Scheduled runs email each overdue task once (again only if its deadline changes).
+// An admin can also email one person now ({ userId }) from their card: that sends all of the
+// person's overdue tasks, even ones already emailed.
 // Runs hourly 8 AM-6 PM Myanmar time from Supabase Cron (supabase/overdue_cron.sql) and on demand from the portal (admins).
 //
 // Secrets (Supabase Dashboard -> Edge Functions -> Secrets):
@@ -23,7 +25,9 @@ type Task = {
   id: string;
   title?: string;
   ownerId?: string;
+  ownerName?: string;
   coAssigneeIds?: string[];
+  coAssigneeNames?: string[];
   due?: string;
   status?: string;
   note?: string;
@@ -71,23 +75,43 @@ Deno.serve(async (req) => {
   const notifiedRaw = await load('overdue_notified');
   const notified: Record<string, string> = notifiedRaw && typeof notifiedRaw === 'object' ? notifiedRaw : {};
 
+  // Same rule as the portal's overdue badge.
   const isOverdue = (t: Task) =>
-    !!t.due && t.due < today && t.status !== 'Completed' && t.status !== 'Cancelled';
+    t.status !== 'Completed' && t.status !== 'Cancelled' && (t.status === 'Overdue' || (!!t.due && t.due < today));
+  // Owner and co-assignees, matched by id or (for older records) by name, as the portal does.
+  const isFor = (t: Task, u: Staff) =>
+    t.ownerId === u.id ||
+    (!!u.name && t.ownerName === u.name) ||
+    (t.coAssigneeIds ?? []).includes(u.id) ||
+    (!!u.name && (t.coAssigneeNames ?? []).includes(u.name));
 
-  // Tasks that are overdue and haven't been emailed for this deadline yet.
-  const fresh = tasks.filter((t) => isOverdue(t) && notified[t.id] !== t.due);
+  let body: { userId?: string } = {};
+  try {
+    body = await req.json();
+  } catch {}
 
-  // Group by recipient (owner + co-assignees).
+  // One person, on demand from their card (admins only): all of their overdue tasks.
+  const single = !fromCron && body.userId ? staff.find((u) => u.id === body.userId) : undefined;
+  if (!fromCron && body.userId) {
+    if (!single) return json({ error: 'Staff member not found.' }, 404);
+    if (!single.email) return json({ error: `${single.name ?? 'This staff member'} has no email address.` }, 400);
+    if (single.status === 'Resigned') return json({ error: 'This staff member is marked Resigned.' }, 400);
+  }
+
+  // Scheduled / portal-wide runs: only tasks not yet emailed for this deadline.
+  const fresh = single
+    ? tasks.filter((t) => isOverdue(t) && isFor(t, single))
+    : tasks.filter((t) => isOverdue(t) && notified[t.id] !== t.due);
+
+  // Group by recipient.
   const byPerson = new Map<string, { person: Staff; tasks: Task[] }>();
-  for (const t of fresh) {
-    const ids = new Set([t.ownerId, ...(t.coAssigneeIds ?? [])].filter(Boolean) as string[]);
-    for (const id of ids) {
-      const person = staff.find((u) => u.id === id);
-      if (!person || !person.email || person.status === 'Resigned') continue;
-      const entry = byPerson.get(id) ?? { person, tasks: [] };
-      entry.tasks.push(t);
-      byPerson.set(id, entry);
-    }
+  const recipients = single ? [single] : staff.filter((u) => u.email && u.status !== 'Resigned');
+  for (const person of recipients) {
+    const mine = fresh.filter((t) => isFor(t, person));
+    if (mine.length) byPerson.set(person.id, { person, tasks: mine });
+  }
+  if (single && byPerson.size === 0) {
+    return json({ ok: true, today, newOverdueTasks: 0, emailsSent: 0, sentTo: [], failed: [] });
   }
 
   const transporter = nodemailer.createTransport({
@@ -140,7 +164,7 @@ Deno.serve(async (req) => {
   const next: Record<string, string> = {};
   for (const t of tasks) {
     if (!isOverdue(t)) continue;
-    if (emailedTaskIds.has(t.id)) next[t.id] = t.due!;
+    if (emailedTaskIds.has(t.id)) next[t.id] = t.due ?? '';
     else if (notified[t.id] === t.due) next[t.id] = notified[t.id];
   }
   await admin
