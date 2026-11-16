@@ -18,10 +18,11 @@ import {
   ShieldCheck,
   Lock,
   Upload,
-  KeyRound
+  KeyRound,
+  Mail
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
-import { manageStaffLogin, staffLoginsEnabled } from '../lib/staffLogins';
+import { manageStaffLogin, sendOverdueEmails, staffLoginsEnabled } from '../lib/staffLogins';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -231,6 +232,35 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     }
   };
 
+  const runOverdueEmails = async () => {
+    setActiveTab('offboard');
+    setLoginBusy(true);
+    setLoginNotice({
+      ok: true,
+      text: language === 'my' ? '📧 Overdue Task များကို စစ်ပြီး Mail ပို့နေသည်...' : '📧 Checking overdue tasks and sending emails...',
+    });
+    const res = await sendOverdueEmails();
+    setLoginBusy(false);
+    if (!res.ok) {
+      setLoginNotice({ ok: false, text: `⚠️ ${res.error}` });
+      return;
+    }
+    const failedText = res.failed.length
+      ? (language === 'my' ? ` ပို့မရသူ: ` : ` Failed: `) + res.failed.map((f) => `${f.email} (${f.error})`).join(', ')
+      : '';
+    setLoginNotice({
+      ok: res.failed.length === 0,
+      text:
+        (res.emailsSent > 0
+          ? language === 'my'
+            ? `✅ Overdue ဖြစ်နေသော ဝန်ထမ်း ${res.emailsSent} ဦးထံ Mail ပို့ပြီးပါပြီ။`
+            : `✅ Emailed ${res.emailsSent} staff member(s) about overdue tasks.`
+          : language === 'my'
+            ? '✅ Mail ပို့ရန် Overdue Task အသစ် မရှိပါ (ပို့ပြီးသား Task များကို ထပ်မပို့ပါ)။'
+            : '✅ No new overdue tasks to email (already-emailed tasks are not sent again).') + failedText,
+    });
+  };
+
   const savePassword = async (user: UserProfile) => {
     if (!user.email) return;
     if (pwEditValue.length < 6) {
@@ -311,6 +341,22 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {staffLoginsEnabled && (
+              <button
+                type="button"
+                onClick={runOverdueEmails}
+                disabled={loginBusy}
+                title={
+                  language === 'my'
+                    ? 'Overdue ဖြစ်နေသော Task ပိုင်ရှင်များထံ ယခု Mail ပို့ရန် (မနက် ၈ နာရီမှ ညနေ ၆ နာရီအတွင်း နာရီတိုင်း အလိုအလျောက် ပို့ပါသည်)'
+                    : 'Email owners of overdue tasks now (also sent automatically every hour, 8 AM-6 PM)'
+                }
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 border border-red-400/50 rounded-lg shadow-xs transition whitespace-nowrap disabled:opacity-60"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                <span>{language === 'my' ? 'Overdue Mail ပို့ရန်' : 'Email overdue'}</span>
+              </button>
+            )}
             {onOpenChangeAdminPassword && (
               <button
                 type="button"

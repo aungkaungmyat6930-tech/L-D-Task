@@ -72,3 +72,32 @@ export async function emailLogin(email: string): Promise<EmailLoginResult> {
   if (otpError) return { kind: 'error', message: otpError.message };
   return { kind: 'signed-in' };
 }
+
+export type OverdueEmailResult =
+  | { ok: true; emailsSent: number; newOverdueTasks: number; failed: { email: string; error: string }[] }
+  | { ok: false; error: string };
+
+/** Admins: email staff about tasks that became overdue (same as the daily schedule). */
+export async function sendOverdueEmails(): Promise<OverdueEmailResult> {
+  if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
+  const { data, error } = await supabase.functions.invoke('overdue-reminders', { body: {} });
+  if (error) {
+    let message = error.message;
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx) {
+        const body = await ctx.json();
+        if (body?.error) message = body.error;
+        else if (ctx.status === 404) message = 'The overdue-reminders function is not set up in Supabase yet.';
+      }
+    } catch {}
+    if (/Failed to send a request/i.test(message)) message = 'The overdue-reminders function is not set up in Supabase yet.';
+    return { ok: false, error: message };
+  }
+  return {
+    ok: true,
+    emailsSent: data?.emailsSent ?? 0,
+    newOverdueTasks: data?.newOverdueTasks ?? 0,
+    failed: data?.failed ?? [],
+  };
+}
