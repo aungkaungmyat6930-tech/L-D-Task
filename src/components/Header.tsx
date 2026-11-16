@@ -233,16 +233,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Workspace Switcher & Tools (Clean Top-Right Cluster) */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-          {/* Org Chart Button */}
-          <button
-            onClick={onOpenOrgChart}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-slate-800/80 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors whitespace-nowrap"
-            title={t.orgChart}
-          >
-            <Network className="w-3.5 h-3.5 text-amber-400" />
-            <span>{t.orgChart}</span>
-          </button>
-
           {/* Language Toggle */}
           <button
             onClick={onToggleLanguage}
