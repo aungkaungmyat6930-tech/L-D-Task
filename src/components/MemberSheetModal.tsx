@@ -32,6 +32,7 @@ import {
   isTaskOverdue,
   isTaskNearDeadline,
   formatDeadlineNotiLabel,
+  getTaskDeadlineStatus,
 } from '../utils/taskHelpers';
 import {
   formatBreakDuration,
@@ -69,7 +70,9 @@ import {
   Bell,
   FileText,
   CheckCircle2,
-  RotateCcw
+  RotateCcw,
+  Check,
+  ListTodo
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
 import { AttachmentPreviewModal } from './AttachmentPreviewModal';
@@ -91,6 +94,8 @@ interface MemberSheetModalProps {
   ) => void;
   onExportExcelSuccess?: (filename: string) => void;
   onOpenAddTask: (member: UserProfile, defaultDate?: string) => void;
+  onQuickSaveTask?: (taskData: Partial<TaskItem>) => void;
+  onQuickUpdateTaskStatus?: (taskId: string, newStatus: TaskItem['status']) => void;
   onOpenEditTask: (task: TaskItem) => void;
   onDeleteTask: (taskId: string) => void;
   onApproveTaskCompletion: (taskId: string, approved: boolean) => void;
@@ -119,6 +124,8 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   onSetAttendanceOverride,
   onExportExcelSuccess,
   onOpenAddTask,
+  onQuickSaveTask,
+  onQuickUpdateTaskStatus,
   onOpenEditTask,
   onDeleteTask,
   onApproveTaskCompletion,
@@ -139,6 +146,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
   const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [selectedWeek, setSelectedWeek] = useState<WeekNumber | 'all'>('all');
   const [viewAllMonths, setViewAllMonths] = useState(false);
+  const [todoDrafts, setTodoDrafts] = useState<
+    Record<number, { title: string; due: string; status: TaskItem['status'] }>
+  >({});
 
   // Interactive 3D Tilt state for Profile Identity Card
   const tiltCardRef = useRef<HTMLDivElement>(null);
@@ -175,6 +185,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
       }
       setSelectedWeek('all');
       setViewAllMonths(false);
+      setTodoDrafts({});
     }
   }, [isOpen, member?.id]);
 
@@ -306,11 +317,13 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
     }
   };
 
-  // Render Task card row
+  // Render Task card row (with Deadline Status + interactive To-Do toggle)
   const renderTaskCard = (task: TaskItem) => {
     const isOverdue = isTaskOverdue(task, todayStr);
     const nearLabel = formatDeadlineNotiLabel(task, todayStr, language);
+    const deadlineInfo = getTaskDeadlineStatus(task, todayStr, language);
     const isPending = task.status === 'Pending' || task.status === 'Waiting';
+    const isCompleted = task.status === 'Completed';
     const isMyTask = task.ownerId === currentUser.id || task.ownerName === currentUser.name;
     const canEditTask = (isMyTask || hasSheetControl) && !isViewer;
     const displayStatus =
@@ -320,72 +333,152 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         ? 'Pending'
         : task.status;
 
+    const handleToggleTodoCheck = () => {
+      if (!canEditTask || !onQuickUpdateTaskStatus) return;
+      if (isCompleted || task.completionRequested) {
+        onQuickUpdateTaskStatus(task.id, 'Active');
+      } else {
+        onQuickUpdateTaskStatus(task.id, 'Completed');
+      }
+    };
+
     return (
       <div
         key={task.id}
-        className="row-3d-card bg-white rounded-lg border border-slate-200/90 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+        className={`row-3d-card rounded-lg border px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${
+          isCompleted
+            ? 'bg-emerald-50/35 border-emerald-200/80'
+            : isOverdue
+            ? 'bg-red-50/30 border-red-200/90'
+            : 'bg-white border-slate-200/90'
+        }`}
       >
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-bold text-slate-900">{task.title}</span>
-            <span
-              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                task.status === 'Completed'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : task.status === 'Overdue'
-                  ? 'bg-red-100 text-red-800'
-                  : isPending
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-blue-100 text-blue-800'
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {onQuickUpdateTaskStatus && (
+            <button
+              type="button"
+              disabled={!canEditTask}
+              onClick={handleToggleTodoCheck}
+              title={
+                !canEditTask
+                  ? undefined
+                  : isCompleted
+                  ? language === 'my'
+                    ? 'In Progress သို့ ပြန်ပြောင်းရန်'
+                    : 'Mark as In Progress'
+                  : canApproveComplete
+                  ? language === 'my'
+                    ? 'ပြီးစီးကြောင်း အမှန်ခြစ်ရန်'
+                    : 'Mark Completed'
+                  : language === 'my'
+                  ? 'ပြီးစီးကြောင်း Admin အတည်ပြုချက် တောင်းခံရန်'
+                  : 'Request Completion Approval'
+              }
+              className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition ${
+                isCompleted
+                  ? 'bg-emerald-600 border-emerald-600 text-white'
+                  : task.completionRequested
+                  ? 'bg-amber-400 border-amber-500 text-slate-950'
+                  : canEditTask
+                  ? 'bg-white border-slate-300 hover:border-blue-600 text-transparent'
+                  : 'bg-slate-100 border-slate-200 text-transparent cursor-not-allowed'
               }`}
             >
-              {displayStatus}
-            </span>
-            {nearLabel && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
-                <Bell className="w-3 h-3 text-amber-700" />
-                <span>{nearLabel}</span>
+              {(isCompleted || task.completionRequested) && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+            </button>
+          )}
+
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`text-xs font-bold ${
+                  isCompleted ? 'line-through text-slate-500' : 'text-slate-900'
+                }`}
+              >
+                {task.title}
               </span>
-            )}
-            {task.completionRequested && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                <Clock className="w-3 h-3" />
-                <span>
-                  {language === 'my' ? 'Admin အတည်ပြုရန် စောင့်ဆိုင်းဆဲ' : 'Pending Admin Approval'}
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                  task.status === 'Completed'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : task.status === 'Overdue'
+                    ? 'bg-red-100 text-red-800'
+                    : isPending
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}
+              >
+                {displayStatus}
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-extrabold ${deadlineInfo.cls}`}
+              >
+                {(deadlineInfo.kind === 'overdue' ||
+                  deadlineInfo.kind === 'due-today' ||
+                  deadlineInfo.kind === 'due-soon') && <Bell className="w-3 h-3" />}
+                <span>{deadlineInfo.label}</span>
+              </span>
+              {task.completionRequested && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                  <Clock className="w-3 h-3" />
+                  <span>
+                    {language === 'my' ? 'Admin အတည်ပြုရန် စောင့်ဆိုင်းဆဲ' : 'Pending Admin Approval'}
+                  </span>
                 </span>
+              )}
+              {task.status === 'Completed' && task.completionApprovedBy && (
+                <span className="text-[10px] font-bold text-emerald-700">
+                  ✓ {task.completionApprovedBy}
+                </span>
+              )}
+              {isMyTask && (
+                <span className="text-[10px] font-bold text-blue-700">
+                  · {language === 'my' ? 'သင့် Task' : 'Your Task'}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
+              <span className={isOverdue ? 'text-red-600 font-bold' : nearLabel ? 'text-amber-800 font-bold' : ''}>
+                Deadline: {task.due}
               </span>
-            )}
-            {task.status === 'Completed' && task.completionApprovedBy && (
-              <span className="text-[10px] font-bold text-emerald-700">
-                ✓ {task.completionApprovedBy}
+              <span aria-hidden="true">·</span>
+              <span>Follow-up: {task.followup}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-semibold text-slate-600">
+                {getWeekOrdinal(getWeekOfMonth(task.due))}
               </span>
-            )}
-            {isMyTask && (
-              <span className="text-[10px] font-bold text-blue-700">
-                · {language === 'my' ? 'သင့် Task' : 'Your Task'}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 tabular-nums">
-            <span className={isOverdue ? 'text-red-600 font-bold' : nearLabel ? 'text-amber-800 font-bold' : ''}>
-              Deadline: {task.due}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>Follow-up: {task.followup}</span>
-            <span aria-hidden="true">·</span>
-            <span className="font-semibold text-slate-600">
-              {getWeekOrdinal(getWeekOfMonth(task.due))}
-            </span>
-            {task.note && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="truncate max-w-xs text-slate-600">{task.note}</span>
-              </>
-            )}
+              {task.note && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="truncate max-w-xs text-slate-600">{task.note}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+          {canEditTask && onQuickUpdateTaskStatus && (
+            <select
+              value={task.status === 'Waiting' ? 'Pending' : task.status}
+              onChange={(e) =>
+                onQuickUpdateTaskStatus(task.id, e.target.value as TaskItem['status'])
+              }
+              className="text-[11px] font-bold bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              title={language === 'my' ? 'Status ပြောင်းရန်' : 'Change Task Status'}
+            >
+              <option value="Active">In Progress</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">
+                {canApproveComplete
+                  ? 'Completed'
+                  : language === 'my'
+                  ? 'Completed (တောင်းဆို)'
+                  : 'Request Complete'}
+              </option>
+            </select>
+          )}
+
           {canApproveComplete && task.completionRequested && (
             <>
               <button
@@ -1049,6 +1142,110 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
               {/* Week Records */}
               <div className="p-3 space-y-2.5">
+                {/* Inline Quick To-Do Writer inside each Week (1st Week, 2nd Week, etc.) */}
+                {activeSubtab === 'tasks' && hasSheetControl && onQuickSaveTask && (() => {
+                  const defaultWeekDue = getDefaultDateForMonthWeek(selectedMonth, wk);
+                  const draft = todoDrafts[wk] || {
+                    title: '',
+                    due: defaultWeekDue,
+                    status: 'Active' as TaskItem['status'],
+                  };
+                  const handleCreateTodo = (e: React.FormEvent) => {
+                    e.preventDefault();
+                    const trimmed = draft.title.trim();
+                    if (!trimmed) return;
+                    const chosenDue = draft.due || defaultWeekDue;
+                    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+                    const [dy, dm, dd] = chosenDue.split('-').map(Number);
+                    const dayObj = new Date(Date.UTC(dy, (dm || 1) - 1, dd || 1));
+                    const weekday = dayNames[dayObj.getUTCDay()] || 'Wed';
+                    onQuickSaveTask({
+                      title: trimmed,
+                      ownerId: member.id,
+                      ownerName: member.name,
+                      due: chosenDue,
+                      followup: chosenDue,
+                      day: weekday,
+                      status: draft.status,
+                      note: `${getWeekOrdinal(wk)} To-Do`,
+                    });
+                    setTodoDrafts((prev) => ({
+                      ...prev,
+                      [wk]: { title: '', due: chosenDue, status: 'Active' },
+                    }));
+                  };
+
+                  return (
+                    <form
+                      onSubmit={handleCreateTodo}
+                      className="bg-blue-50/60 border border-blue-200/90 rounded-xl p-2.5 flex flex-wrap items-center gap-2"
+                    >
+                      <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-blue-900 shrink-0 px-1">
+                        <ListTodo className="w-4 h-4 text-blue-600" />
+                        <span>
+                          {language === 'my'
+                            ? `${getWeekOrdinal(wk)} To-Do:`
+                            : `${getWeekOrdinal(wk)} To-Do:`}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        value={draft.title}
+                        onChange={(e) =>
+                          setTodoDrafts((prev) => ({
+                            ...prev,
+                            [wk]: { ...draft, title: e.target.value },
+                          }))
+                        }
+                        placeholder={
+                          language === 'my'
+                            ? `${getWeekOrdinal(wk)} အတွက် To-Do / Task အသစ် ရေးထည့်ပါ...`
+                            : `Write a To-Do task for ${getWeekOrdinal(wk)}...`
+                        }
+                        className="flex-1 min-w-[200px] text-xs font-medium px-3 py-1.5 bg-white border border-blue-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-slate-600">Deadline:</span>
+                        <input
+                          type="date"
+                          value={draft.due}
+                          onChange={(e) =>
+                            setTodoDrafts((prev) => ({
+                              ...prev,
+                              [wk]: { ...draft, due: e.target.value },
+                            }))
+                          }
+                          className="text-xs font-semibold px-2 py-1.5 bg-white border border-blue-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <select
+                        value={draft.status}
+                        onChange={(e) =>
+                          setTodoDrafts((prev) => ({
+                            ...prev,
+                            [wk]: { ...draft, status: e.target.value as TaskItem['status'] },
+                          }))
+                        }
+                        className="text-xs font-bold px-2 py-1.5 bg-white border border-blue-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="Active">In Progress</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Completed">
+                          {canApproveComplete ? 'Completed' : 'Request Complete'}
+                        </option>
+                      </select>
+                      <button
+                        type="submit"
+                        disabled={!draft.title.trim()}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg shadow-xs transition shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{language === 'my' ? 'To-Do ထည့်မည်' : 'Add To-Do'}</span>
+                      </button>
+                    </form>
+                  );
+                })()}
+
                 {count === 0 ? (
                   <div className="py-3 px-4 text-center text-[11px] text-slate-400 flex items-center justify-between">
                     <span>
@@ -1056,7 +1253,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                         ? `${getWeekOrdinal(wk)} အတွင်း မှတ်တမ်းမရှိသေးပါ`
                         : `No records scheduled in ${getWeekOrdinal(wk)}`}
                     </span>
-                    {!isViewer && (
+                    {!isViewer && activeSubtab !== 'tasks' && (
                       <button
                         type="button"
                         onClick={() => handleAddForWeek(wk)}
@@ -1073,23 +1270,43 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                         <div className="px-3 py-1.5 bg-blue-100/70 border-b border-blue-200 text-[11px] font-extrabold text-blue-950 flex items-center justify-between">
                           <span>
                             {language === 'my'
-                              ? `${getWeekOrdinal(wk)} Task များ (Title နှင့် Deadline စာရင်း)`
-                              : `${getWeekOrdinal(wk)} Tasks — Title & Deadline Overview`}
+                              ? `${getWeekOrdinal(wk)} To-Do List & Deadline Status စာရင်း`
+                              : `${getWeekOrdinal(wk)} To-Do List & Deadline Status`}
                           </span>
-                          <span className="tabular-nums">{wkTasks.length} tasks</span>
+                          <span className="tabular-nums">
+                            {wkTasks.filter((tk) => tk.status === 'Completed').length}/{wkTasks.length} Done
+                          </span>
                         </div>
                         <div className="divide-y divide-blue-100">
-                          {wkTasks.map((tk) => (
-                            <div
-                              key={`summary-${tk.id}`}
-                              className="px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] bg-white/80"
-                            >
-                              <span className="font-bold text-slate-900 truncate">{tk.title}</span>
-                              <span className="font-bold text-blue-800 tabular-nums shrink-0">
-                                Deadline: {tk.due}
-                              </span>
-                            </div>
-                          ))}
+                          {wkTasks.map((tk) => {
+                            const dStatus = getTaskDeadlineStatus(tk, todayStr, language);
+                            return (
+                              <div
+                                key={`summary-${tk.id}`}
+                                className="px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] bg-white/85"
+                              >
+                                <span
+                                  className={`font-bold truncate ${
+                                    tk.status === 'Completed'
+                                      ? 'line-through text-slate-400'
+                                      : 'text-slate-900'
+                                  }`}
+                                >
+                                  {tk.status === 'Completed' ? '☑' : '☐'} {tk.title}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span
+                                    className={`px-2 py-0.5 rounded border text-[10px] font-extrabold ${dStatus.cls}`}
+                                  >
+                                    {dStatus.label}
+                                  </span>
+                                  <span className="font-bold text-slate-600 tabular-nums">
+                                    ({tk.due})
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -1618,10 +1835,13 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
               {weeksInMonth.map((wk) => {
                 const wkCount = getRecordCountForWeek(wk);
-                const wkPreviewTasks =
+                const wkTaskItems =
                   activeSubtab === 'tasks'
-                    ? monthTasks.filter((item) => getWeekOfMonth(item.due) === wk).slice(0, 2)
+                    ? monthTasks.filter((item) => getWeekOfMonth(item.due) === wk)
                     : [];
+                const wkOverdueCount = wkTaskItems.filter((item) => isTaskOverdue(item, todayStr)).length;
+                const wkDueSoonCount = wkTaskItems.filter((item) => isTaskNearDeadline(item, todayStr)).length;
+                const wkPreviewTasks = wkTaskItems.slice(0, 2);
                 const { startDay, endDay } = getWeekDayRange(selectedMonth, wk);
                 const isSelected = selectedWeek === wk;
                 const activeBoxCls =
@@ -1649,17 +1869,29 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                   >
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-xs font-extrabold">{getWeekOrdinal(wk)}</span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-black tabular-nums ${
-                          isSelected
-                            ? 'bg-white/20 text-white'
-                            : wkCount > 0
-                            ? 'bg-slate-900/10 text-slate-900'
-                            : 'bg-slate-100 text-slate-400'
-                        }`}
-                      >
-                        {wkCount}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {wkOverdueCount > 0 && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-red-500 text-white font-black tabular-nums">
+                            {wkOverdueCount}!
+                          </span>
+                        )}
+                        {wkDueSoonCount > 0 && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400 text-slate-950 font-black tabular-nums">
+                            {wkDueSoonCount}⏰
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-black tabular-nums ${
+                            isSelected
+                              ? 'bg-white/20 text-white'
+                              : wkCount > 0
+                              ? 'bg-slate-900/10 text-slate-900'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}
+                        >
+                          {wkCount}
+                        </span>
+                      </div>
                     </div>
                     {wkPreviewTasks.length > 0 && (
                       <div className="mt-1 space-y-0.5">
@@ -1670,7 +1902,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                               isSelected ? 'text-white/95' : 'text-slate-700'
                             }`}
                           >
-                            • {tk.title} ({tk.due.slice(5)})
+                            {tk.status === 'Completed' ? '☑' : '☐'} {tk.title} ({tk.due.slice(5)})
                           </div>
                         ))}
                       </div>

@@ -162,6 +162,8 @@ export interface AppearanceSettings {
   logoType?: 'badge' | 'image';
   logoText?: string;
   logoImageDataUrl?: string;
+  logoSize?: 'md' | 'lg' | 'xl';
+  navbarImageDataUrl?: string;
 }
 
 export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects';

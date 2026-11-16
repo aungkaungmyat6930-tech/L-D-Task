@@ -130,7 +130,7 @@ export function processLeaveAttachmentFile(file: File): Promise<LeaveAttachment>
   });
 }
 
-export function processLogoImageFile(file: File, maxSize = 256): Promise<string> {
+export function processLogoImageFile(file: File, maxSize = 400): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!file.type.startsWith('image/')) {
       reject(new Error('Please select a valid image file (PNG, JPG, WebP, SVG).'));
@@ -166,6 +166,49 @@ export function processLogoImageFile(file: File, maxSize = 256): Promise<string>
         }
         ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export function processBannerImageFile(file: File, maxWidth = 1440): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Please select a valid image file (PNG, JPG, WebP).'));
+      return;
+    }
+
+    if (file.size > 12 * 1024 * 1024) {
+      reject(new Error('Image file is too large (max 12MB).'));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to load image preview.'));
+      img.onload = () => {
+        let width = img.width || maxWidth;
+        let height = img.height || 320;
+        if (width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = Math.max(1, Math.round(width * ratio));
+          height = Math.max(1, Math.round(height * ratio));
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.84));
       };
       img.src = dataUrl;
     };

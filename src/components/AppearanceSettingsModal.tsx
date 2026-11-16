@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AppearanceSettings, FontScaleOption } from '../types';
 import { Language } from '../utils/translations';
-import { processLogoImageFile } from '../utils/imageUpload';
+import { processLogoImageFile, processBannerImageFile } from '../utils/imageUpload';
 import {
   X,
   Check,
@@ -12,6 +12,7 @@ import {
   Upload,
   Sparkles,
   Trash2,
+  Maximize2,
 } from 'lucide-react';
 
 interface AppearanceSettingsModalProps {
@@ -96,8 +97,14 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
   const [logoImageDataUrl, setLogoImageDataUrl] = useState<string>(
     settings.logoImageDataUrl || ''
   );
+  const [logoSize, setLogoSize] = useState<'md' | 'lg' | 'xl'>(settings.logoSize || 'lg');
+  const [navbarImageDataUrl, setNavbarImageDataUrl] = useState<string>(
+    settings.navbarImageDataUrl || ''
+  );
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [navbarUploadError, setNavbarUploadError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const navbarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setFontScale(settings.fontScale);
@@ -110,7 +117,10 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     setLogoType(settings.logoType || 'badge');
     setLogoText(settings.logoText || 'KBZ');
     setLogoImageDataUrl(settings.logoImageDataUrl || '');
+    setLogoSize(settings.logoSize || 'lg');
+    setNavbarImageDataUrl(settings.navbarImageDataUrl || '');
     setLogoUploadError(null);
+    setNavbarUploadError(null);
   }, [settings, isOpen]);
 
   if (!isOpen) return null;
@@ -131,11 +141,25 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     if (!file) return;
     try {
       setLogoUploadError(null);
-      const dataUrl = await processLogoImageFile(file, 256);
+      const dataUrl = await processLogoImageFile(file, 400);
       setLogoImageDataUrl(dataUrl);
       setLogoType('image');
     } catch (err) {
       setLogoUploadError(err instanceof Error ? err.message : 'Failed to upload logo.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleNavbarImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setNavbarUploadError(null);
+      const dataUrl = await processBannerImageFile(file, 1440);
+      setNavbarImageDataUrl(dataUrl);
+    } catch (err) {
+      setNavbarUploadError(err instanceof Error ? err.message : 'Failed to upload navbar image.');
     } finally {
       e.target.value = '';
     }
@@ -152,6 +176,8 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       logoType: logoType === 'image' && logoImageDataUrl ? 'image' : 'badge',
       logoText: logoText.trim() || 'KBZ',
       logoImageDataUrl: logoImageDataUrl || undefined,
+      logoSize,
+      navbarImageDataUrl: navbarImageDataUrl || undefined,
     });
     onClose();
   };
@@ -287,6 +313,106 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
                   <p className="w-full text-[11px] text-red-600 font-semibold">{logoUploadError}</p>
                 )}
               </div>
+            )}
+
+            {/* Logo Size Preset */}
+            <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                <Maximize2 className="w-3.5 h-3.5 text-amber-600" />
+                <span>{language === 'my' ? 'KBZ Logo အရွယ်အစား' : 'Logo Display Size'}</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                {[
+                  { id: 'md' as const, labelEn: 'Medium (48px)', labelMy: 'အလတ် (48px)' },
+                  { id: 'lg' as const, labelEn: 'Large (64px)', labelMy: 'အကြီး (64px)' },
+                  { id: 'xl' as const, labelEn: 'Extra Large (80px)', labelMy: 'အထူးကြီး (80px)' },
+                ].map((sz) => (
+                  <button
+                    key={sz.id}
+                    type="button"
+                    onClick={() => setLogoSize(sz.id)}
+                    className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition ${
+                      logoSize === sz.id
+                        ? 'border-amber-600 bg-amber-100 text-amber-950'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {language === 'my' ? sz.labelMy : sz.labelEn}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 1B. Navi Bar / Header Banner Image (Admin & Super Admin) */}
+          <div className="space-y-2.5 bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-blue-600" />
+                  <span>
+                    {language === 'my'
+                      ? 'Navi Bar / Header ပုံတင်ရန်နှင့် ပြင်ဆင်ရန်'
+                      : 'Navigation Bar Banner Image (Optional)'}
+                  </span>
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {language === 'my'
+                    ? 'Admin နှင့် Super Admin များမှ Navigation Bar နောက်ခံပုံကို တင်ခြင်း၊ ပြောင်းလဲခြင်း ပြုလုပ်နိုင်ပါသည်'
+                    : 'Upload or edit a background image displayed across the portal header & navigation bar'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  ref={navbarInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleNavbarImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => navbarInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition shadow-xs"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>
+                    {navbarImageDataUrl
+                      ? language === 'my'
+                        ? 'ပုံပြောင်းတင်ရန်'
+                        : 'Replace Image'
+                      : language === 'my'
+                      ? 'Navi Bar ပုံတင်ရန်'
+                      : 'Upload Nav Image'}
+                  </span>
+                </button>
+                {navbarImageDataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setNavbarImageDataUrl('')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{language === 'my' ? 'ဖယ်ရှားရန်' : 'Remove'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            {navbarImageDataUrl && (
+              <div
+                className="h-16 rounded-lg border border-slate-300 overflow-hidden flex items-center justify-between px-4 text-white text-xs font-bold"
+                style={{
+                  backgroundImage: `linear-gradient(rgba(15,23,42,0.62), rgba(15,23,42,0.75)), url(${navbarImageDataUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }}
+              >
+                <span>{language === 'my' ? 'Navi Bar နောက်ခံပုံ Preview' : 'Nav Bar Image Preview'}</span>
+                <span className="px-2 py-0.5 rounded bg-white/20 text-[10px]">Active</span>
+              </div>
+            )}
+            {navbarUploadError && (
+              <p className="text-[11px] text-red-600 font-semibold">{navbarUploadError}</p>
             )}
           </div>
 
@@ -509,22 +635,44 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
           {/* Live Portal Preview (Header + Body Typography) */}
           <div className="rounded-xl border border-slate-300 overflow-hidden shadow-xs">
             <div
-              className="px-4 py-2.5 text-white flex items-center justify-between gap-2"
-              style={{ backgroundColor: themeColor }}
+              className="px-4 py-3 text-white flex items-center justify-between gap-2"
+              style={
+                navbarImageDataUrl
+                  ? {
+                      backgroundColor: themeColor,
+                      backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.65), rgba(15, 23, 42, 0.78)), url(${navbarImageDataUrl})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
+                  : { backgroundColor: themeColor }
+              }
             >
               <div className="flex items-center gap-2.5">
                 {logoType === 'image' && logoImageDataUrl ? (
                   <img
                     src={logoImageDataUrl}
                     alt="Preview Logo"
-                    className="w-8 h-8 rounded-lg object-contain bg-white/10 p-0.5"
+                    className={`${
+                      logoSize === 'xl' ? 'h-12' : logoSize === 'md' ? 'h-9' : 'h-11'
+                    } w-auto max-w-[120px] rounded-lg object-contain bg-white/10 p-0.5`}
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex items-center justify-center font-extrabold text-slate-950 text-xs">
-                    {logoText.trim() || 'KBZ'}
+                  <div
+                    className={`${
+                      logoSize === 'xl'
+                        ? 'h-12 px-3 text-sm'
+                        : logoSize === 'md'
+                        ? 'h-9 px-2 text-xs'
+                        : 'h-11 px-2.5 text-sm'
+                    } rounded-xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-300 flex flex-col items-center justify-center font-extrabold text-slate-950 leading-none`}
+                  >
+                    <span>{logoText.trim() || 'KBZ'}</span>
+                    {(logoText.trim() || 'KBZ').toUpperCase() === 'KBZ' && (
+                      <span className="text-[8px] font-black tracking-widest mt-0.5">LIFE</span>
+                    )}
                   </div>
                 )}
-                <span className="text-xs font-bold text-white">KBZ Life L&D Portal</span>
+                <span className="text-sm font-extrabold text-white">KBZ Life L&D Portal</span>
               </div>
               <span
                 className="text-[10px] font-bold text-white px-2.5 py-1 rounded-md"

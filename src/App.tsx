@@ -58,6 +58,7 @@ const DEFAULT_APPEARANCE: AppearanceSettings = {
   accentColor: '#2563eb',
   logoType: 'badge',
   logoText: 'KBZ',
+  logoSize: 'lg',
 };
 
 const STORAGE_KEYS = {
@@ -1479,6 +1480,14 @@ export default function App() {
         }}
         onLockAdmin={handleLockAdmin}
         onOpenAppearanceSettings={() => setIsAppearanceModalOpen(true)}
+        onQuickUpdateAppearance={(patch, feedbackMsg) => {
+          if (Object.keys(patch).length > 0) {
+            setAppearanceSettings((prev) => ({ ...prev, ...patch }));
+          }
+          if (feedbackMsg) {
+            showToast(feedbackMsg);
+          }
+        }}
         appearanceSettings={appearanceSettings}
         currentTab={currentTab}
         onSelectTab={(tab) => setCurrentTab(tab)}
@@ -1723,6 +1732,8 @@ export default function App() {
         onOpenAddTask={(member, defaultDate) => {
           handleOpenAddTask(member, defaultDate);
         }}
+        onQuickSaveTask={handleSaveTask}
+        onQuickUpdateTaskStatus={handleUpdateTaskStatus}
         onOpenEditTask={(task) => {
           setTaskToEdit(task);
           setIsTaskModalOpen(true);
