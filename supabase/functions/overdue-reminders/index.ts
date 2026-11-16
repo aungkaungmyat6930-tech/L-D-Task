@@ -1,6 +1,6 @@
 // Supabase Edge Function: emails staff when their tasks become overdue.
 // Each overdue task is emailed once (again only if its deadline changes and it becomes overdue again).
-// Runs daily from Supabase Cron (supabase/overdue_cron.sql) and on demand from the portal (admins).
+// Runs hourly 8 AM-6 PM Myanmar time from Supabase Cron (supabase/overdue_cron.sql) and on demand from the portal (admins).
 //
 // Secrets (Supabase Dashboard -> Edge Functions -> Secrets):
 //   GMAIL_USER          the Gmail address that sends the emails

@@ -348,8 +348,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 disabled={loginBusy}
                 title={
                   language === 'my'
-                    ? 'Overdue ဖြစ်နေသော Task ပိုင်ရှင်များထံ ယခု Mail ပို့ရန် (နေ့စဉ် မနက် ၉ နာရီတွင် အလိုအလျောက် ပို့ပါသည်)'
-                    : 'Email owners of overdue tasks now (also sent automatically every day at 9:00 AM)'
+                    ? 'Overdue ဖြစ်နေသော Task ပိုင်ရှင်များထံ ယခု Mail ပို့ရန် (မနက် ၈ နာရီမှ ညနေ ၆ နာရီအတွင်း နာရီတိုင်း အလိုအလျောက် ပို့ပါသည်)'
+                    : 'Email owners of overdue tasks now (also sent automatically every hour, 8 AM-6 PM)'
                 }
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 border border-red-400/50 rounded-lg shadow-xs transition whitespace-nowrap disabled:opacity-60"
               >
