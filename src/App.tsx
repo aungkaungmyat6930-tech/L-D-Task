@@ -26,6 +26,7 @@ import {
 } from './utils/roleHelpers';
 import { isTaskOverdue, isTaskNearDeadline } from './utils/taskHelpers';
 import { formatTotalTrainerHours } from './utils/trainingHelpers';
+import { useCloudSync } from './lib/cloudSync';
 
 // Components
 import { Header } from './components/Header';
@@ -367,6 +368,52 @@ export default function App() {
       document.documentElement.removeAttribute('data-custom-text-color');
     }
   }, [appearanceSettings]);
+
+  // Sync shared data with Supabase (table `app_state`). Language and the active user stay per-browser.
+  const cloudStatus = useCloudSync([
+    { key: 'users', value: users, apply: (v: UserProfile[]) => Array.isArray(v) && setUsers(v) },
+    {
+      key: 'tasks',
+      value: tasks,
+      apply: (v: TaskItem[]) =>
+        Array.isArray(v) &&
+        setTasks(v.map((tk) => (tk.status === 'Waiting' ? { ...tk, status: 'Pending' as const } : tk))),
+    },
+    { key: 'leaves', value: leaves, apply: (v: LeaveRequest[]) => Array.isArray(v) && setLeaves(v) },
+    { key: 'training', value: trainingLogs, apply: (v: TrainingLog[]) => Array.isArray(v) && setTrainingLogs(v) },
+    { key: 'projects', value: projects, apply: (v: StrategicProject[]) => Array.isArray(v) && setProjects(v) },
+    {
+      key: 'attendance',
+      value: attendanceOverrides,
+      apply: (v: AttendanceRecord[]) => Array.isArray(v) && setAttendanceOverrides(v),
+    },
+    {
+      key: 'allow_member_deadline',
+      value: allowMemberDeadlineSetup,
+      apply: (v: boolean) => setAllowMemberDeadlineSetup(v !== false),
+    },
+    {
+      key: 'appearance',
+      value: appearanceSettings,
+      apply: (v: AppearanceSettings) => v && setAppearanceSettings({ ...DEFAULT_APPEARANCE, ...v }),
+    },
+    { key: 'admin_password', value: adminPassword, apply: (v: string) => typeof v === 'string' && v && setAdminPassword(v) },
+  ]);
+
+  useEffect(() => {
+    if (cloudStatus === 'error') {
+      console.warn('Supabase sync failed; changes are still saved in this browser.');
+    }
+  }, [cloudStatus]);
+
+  // Keep the active user in step with the user list (e.g. after edits from another browser).
+  useEffect(() => {
+    if (!currentUser) return;
+    const refreshed = users.find((u) => u.id === currentUser.id);
+    if (refreshed && JSON.stringify(refreshed) !== JSON.stringify(currentUser)) {
+      setCurrentUser(refreshed);
+    }
+  }, [users]);
 
   // Auto-evaluate Overdue Tasks
   useEffect(() => {
