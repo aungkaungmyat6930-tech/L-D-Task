@@ -1325,9 +1325,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 perspective-stage flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md">
-      <div className="sheet-3d-shell bg-slate-100 rounded-3xl w-full max-w-5xl max-h-[93vh] flex flex-col overflow-hidden border border-white/25">
+      <div className="sheet-3d-shell bg-slate-100 rounded-3xl w-full max-w-5xl max-h-[93vh] flex flex-col overflow-y-auto overscroll-contain border border-white/25">
         {/* 3D Depth Stage Header */}
-        <div className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white px-5 sm:px-7 py-5 border-b border-slate-700/80 overflow-hidden">
+        <div className="relative shrink-0 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white px-5 sm:px-7 py-5 border-b border-slate-700/80 overflow-hidden">
           {/* Subtle 3D Architectural Grid & Light Glow */}
           <div
             className="pointer-events-none absolute inset-0 opacity-20"
@@ -1603,7 +1603,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         </div>
 
         {/* Subtabs & Quick Action Bar */}
-        <div className="bg-white border-b border-slate-200 px-5 sm:px-7 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="shrink-0 bg-white border-b border-slate-200 px-5 sm:px-7 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setActiveSubtab('tasks')}
@@ -1725,7 +1725,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         </div>
 
         {/* Month & Weekly Breakdown Bar (1st Week, 2nd Week, 3rd Week, 4th Week, 5th Week) */}
-        <div className="bg-slate-50 border-b border-slate-200 px-5 sm:px-7 py-3 space-y-2.5">
+        <div className="shrink-0 bg-slate-50 border-b border-slate-200 px-5 sm:px-7 py-3 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Month Navigator */}
             <div className="flex items-center gap-1.5">
@@ -1922,7 +1922,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
         </div>
 
         {/* Scrollable 3D Sheet Body */}
-        <div className="p-5 sm:p-7 overflow-y-auto flex-grow space-y-4 bg-gradient-to-b from-slate-100 to-slate-200/70">
+        <div className="p-5 sm:p-7 shrink-0 flex-grow space-y-4 bg-gradient-to-b from-slate-100 to-slate-200/70">
           {renderActiveRecords()}
         </div>
       </div>

@@ -1886,13 +1886,6 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
             <span>Branch & Agency Channels</span>
             <span>•</span>
             <span>Digital LMS Integration</span>
-            <span>•</span>
-            <button
-              onClick={() => setIsOrgChartModalOpen(true)}
-              className="text-blue-600 hover:underline"
-            >
-              System Org-Chart
-            </button>
           </div>
         </div>
       </footer>
