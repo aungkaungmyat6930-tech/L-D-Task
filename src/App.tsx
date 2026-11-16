@@ -419,7 +419,7 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     },
     { key: 'admin_password', value: adminPassword, apply: (v: string) => typeof v === 'string' && v && setAdminPassword(v) },
   ];
-  const cloudStatus = useCloudSync(
+  const { status: cloudStatus, error: cloudError } = useCloudSync(
     guest ? cloudSlices.filter((sl) => sl.key !== 'admin_password') : cloudSlices,
     { guest }
   );
@@ -1591,8 +1591,29 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     [trainingLogs]
   );
 
+  // Don't flash data saved in this browser while the shared data is loading.
+  if (cloudStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-slate-50 text-slate-500">
+        <div className="w-8 h-8 border-4 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+        <p className="text-sm font-semibold">
+          {language === 'my' ? 'Data များ ရယူနေသည်...' : 'Loading shared data...'}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      {/* Shared database problem: say so instead of silently showing this browser's copy */}
+      {cloudStatus === 'error' && (
+        <div className="sticky top-0 z-[70] bg-red-600 text-white px-4 py-2 text-xs font-semibold text-center shadow">
+          {language === 'my'
+            ? '⚠️ Supabase (Shared Database) နှင့် ချိတ်ဆက်၍ မရပါ။ ဤ Browser ထဲ သိမ်းထားသော Data အဟောင်းကိုသာ ပြနေပါသည်။ ပြင်ဆင်မှုများ အခြားသူများထံ မရောက်ပါ။'
+            : '⚠️ Cannot reach Supabase (shared database). Showing data saved in this browser only; changes will not reach others.'}
+          {cloudError && <span className="block font-mono font-normal opacity-90 mt-0.5">{cloudError}</span>}
+        </div>
+      )}
       {/* Toast Notification Popup */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-slideUp text-xs font-semibold">
