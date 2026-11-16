@@ -82,12 +82,12 @@ interface AppProps {
   /** Email of the signed-in staff member (Supabase Auth). Undefined when login is not configured. */
   authEmail?: string;
   onSignOut?: () => void;
-  /** Visitor who is not signed in: read-only view of the public data. */
+  /** Visitor who is not signed in: can act as any Member/Viewer; admin work needs sign-in. */
   guest?: boolean;
   onSignIn?: () => void;
 }
 
-/** Profile used for visitors who are not signed in (read-only Viewer). */
+/** Fallback for visitors when the staff list has no Members (read-only Viewer). */
 const GUEST_PROFILE: UserProfile = {
   id: 'guest',
   name: 'Guest',
@@ -421,7 +421,7 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
   ];
   const cloudStatus = useCloudSync(
     guest ? cloudSlices.filter((sl) => sl.key !== 'admin_password') : cloudSlices,
-    { readOnly: guest }
+    { guest }
   );
 
   useEffect(() => {
@@ -439,13 +439,27 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     [users, authEmail]
   );
   const authIsAdmin = !!authProfile && isAdminOrSuper(authProfile.roleTier);
-  const canSwitchUser = !guest && (!authEmail || authIsAdmin);
+  const canSwitchUser = guest || !authEmail || authIsAdmin;
   const canResetData = !guest && (!authEmail || authProfile?.roleTier === 'SUPER_ADMIN');
 
-  // Visitors always act as the read-only Guest profile.
+  // Visitors can act as any Member/Viewer, never as an admin (that needs a real sign-in).
   useEffect(() => {
-    if (guest && currentUser?.id !== GUEST_PROFILE.id) setCurrentUser(GUEST_PROFILE);
-  }, [guest, currentUser]);
+    if (!guest) return;
+    if (isAdminUnlocked) {
+      setIsAdminUnlocked(false);
+      try {
+        sessionStorage.removeItem(SESSION_ADMIN_UNLOCKED);
+      } catch {}
+    }
+    const current = users.find((u) => u.id === currentUser?.id);
+    if (!current || isAdminOrSuper(current.roleTier) || current.status === 'Resigned') {
+      const fallback =
+        users.find((u) => u.roleTier === 'MEMBER' && u.status !== 'Resigned') ||
+        users.find((u) => u.roleTier === 'VIEWER' && u.status !== 'Resigned') ||
+        GUEST_PROFILE;
+      if (fallback.id !== currentUser?.id) setCurrentUser(fallback);
+    }
+  }, [guest, users, currentUser, isAdminUnlocked]);
 
   // On sign-in, act as the signed-in person. Admins are unlocked automatically; members stay on their own profile.
   const lastAuthProfileId = React.useRef<string | null>(null);
@@ -519,6 +533,17 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     if (!canSwitchUser) return;
     const found = users.find((u) => u.id === userId);
     if (!found) return;
+
+    // Visitors: admin accounts need a real sign-in with email and password.
+    if (guest && isAdminOrSuper(found.roleTier)) {
+      showToast(
+        language === 'my'
+          ? 'Admin အဖြစ် ဆောင်ရွက်ရန် Email နှင့် Password ဖြင့် ဝင်ပါ။'
+          : 'Sign in with your email and password to work as an admin.'
+      );
+      onSignIn?.();
+      return;
+    }
 
     if (isAdminOrSuper(found.roleTier) && !isAdminUnlocked) {
       setPendingAdminUser(found);
@@ -1528,6 +1553,14 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
   };
 
   const handleOpenEditProfile = (userToEdit?: UserProfile) => {
+    if (guest) {
+      showToast(
+        language === 'my'
+          ? 'Profile ပြင်ရန် Sign in ဝင်ပါ။'
+          : 'Sign in to edit profiles.'
+      );
+      return;
+    }
     setProfileUserToEdit(userToEdit || currentUser);
     setIsProfileModalOpen(true);
   };
