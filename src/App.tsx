@@ -82,9 +82,23 @@ interface AppProps {
   /** Email of the signed-in staff member (Supabase Auth). Undefined when login is not configured. */
   authEmail?: string;
   onSignOut?: () => void;
+  /** Visitor who is not signed in: read-only view of the public data. */
+  guest?: boolean;
+  onSignIn?: () => void;
 }
 
-export default function App({ authEmail, onSignOut }: AppProps = {}) {
+/** Profile used for visitors who are not signed in (read-only Viewer). */
+const GUEST_PROFILE: UserProfile = {
+  id: 'guest',
+  name: 'Guest',
+  roleLabel: 'Visitor (read-only)',
+  dept: '',
+  roleTier: 'VIEWER',
+  avatar:
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+};
+
+export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps = {}) {
   // State Initialization from LocalStorage or Defaults
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
@@ -376,7 +390,7 @@ export default function App({ authEmail, onSignOut }: AppProps = {}) {
   }, [appearanceSettings]);
 
   // Sync shared data with Supabase (table `app_state`). Language and the active user stay per-browser.
-  const cloudStatus = useCloudSync([
+  const cloudSlices = [
     { key: 'users', value: users, apply: (v: UserProfile[]) => Array.isArray(v) && setUsers(v) },
     {
       key: 'tasks',
@@ -404,7 +418,11 @@ export default function App({ authEmail, onSignOut }: AppProps = {}) {
       apply: (v: AppearanceSettings) => v && setAppearanceSettings({ ...DEFAULT_APPEARANCE, ...v }),
     },
     { key: 'admin_password', value: adminPassword, apply: (v: string) => typeof v === 'string' && v && setAdminPassword(v) },
-  ]);
+  ];
+  const cloudStatus = useCloudSync(
+    guest ? cloudSlices.filter((sl) => sl.key !== 'admin_password') : cloudSlices,
+    { readOnly: guest }
+  );
 
   useEffect(() => {
     if (cloudStatus === 'error') {
@@ -421,8 +439,13 @@ export default function App({ authEmail, onSignOut }: AppProps = {}) {
     [users, authEmail]
   );
   const authIsAdmin = !!authProfile && isAdminOrSuper(authProfile.roleTier);
-  const canSwitchUser = !authEmail || authIsAdmin;
-  const canResetData = !authEmail || authProfile?.roleTier === 'SUPER_ADMIN';
+  const canSwitchUser = !guest && (!authEmail || authIsAdmin);
+  const canResetData = !guest && (!authEmail || authProfile?.roleTier === 'SUPER_ADMIN');
+
+  // Visitors always act as the read-only Guest profile.
+  useEffect(() => {
+    if (guest && currentUser?.id !== GUEST_PROFILE.id) setCurrentUser(GUEST_PROFILE);
+  }, [guest, currentUser]);
 
   // On sign-in, act as the signed-in person. Admins are unlocked automatically; members stay on their own profile.
   const lastAuthProfileId = React.useRef<string | null>(null);
@@ -1560,6 +1583,7 @@ export default function App({ authEmail, onSignOut }: AppProps = {}) {
         canResetData={canResetData}
         authEmail={authEmail}
         onSignOut={onSignOut}
+        onSignIn={onSignIn}
         onOpenEditProfile={() => handleOpenEditProfile(currentUser)}
         onOpenOrgChart={() => setIsOrgChartModalOpen(true)}
         onResetData={handleResetData}

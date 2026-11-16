@@ -14,13 +14,16 @@ export interface CloudSlice {
 export type CloudStatus = 'disabled' | 'loading' | 'synced' | 'error';
 
 const SAVE_DELAY_MS = 600;
+/** Visitors who are not signed in re-read the public data this often. */
+const GUEST_REFRESH_MS = 30_000;
 
 /**
  * Loads every slice from Supabase on start, writes local changes back (debounced),
  * and applies changes made in other browsers via Realtime.
  * localStorage keeps working as an offline cache alongside this.
  */
-export function useCloudSync(slices: CloudSlice[]): CloudStatus {
+export function useCloudSync(slices: CloudSlice[], options: { readOnly?: boolean } = {}): CloudStatus {
+  const readOnly = !!options.readOnly;
   const [status, setStatus] = useState<CloudStatus>(supabase ? 'loading' : 'disabled');
   const loaded = useRef(false);
   const lastSynced = useRef<Record<string, string>>({});
@@ -45,6 +48,27 @@ export function useCloudSync(slices: CloudSlice[]): CloudStatus {
       lastSynced.current[key] = json;
       slice.apply(value);
     };
+
+    if (readOnly) {
+      // Visitors: read the public (sanitised) data, never write, refresh periodically.
+      const loadPublic = async () => {
+        const { data, error } = await client.rpc('get_public_state');
+        if (cancelled) return;
+        if (error) {
+          console.error('[supabase] public load failed:', error.message);
+          setStatus('error');
+          return;
+        }
+        for (const row of (data ?? []) as { key: string; value: unknown }[]) applyRemote(row.key, row.value);
+        setStatus('synced');
+      };
+      loadPublic();
+      const timer = setInterval(loadPublic, GUEST_REFRESH_MS);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
+    }
 
     (async () => {
       const { data, error } = await client.from(STATE_TABLE).select('key, value');
@@ -93,7 +117,7 @@ export function useCloudSync(slices: CloudSlice[]): CloudStatus {
   // Save local changes.
   const deps = slices.map((s) => s.value);
   useEffect(() => {
-    if (!supabase || !loaded.current) return;
+    if (!supabase || !loaded.current || readOnly) return;
     const client = supabase;
     for (const slice of slicesRef.current) {
       const json = JSON.stringify(slice.value);
