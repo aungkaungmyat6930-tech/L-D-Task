@@ -49,6 +49,7 @@ import { UserManagementModal } from './components/UserManagementModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AdminPasswordModal } from './components/AdminPasswordModal';
 import { AppearanceSettingsModal } from './components/AppearanceSettingsModal';
+import { useCloudSync } from './hooks/useCloudSync';
 
 const DEFAULT_APPEARANCE: AppearanceSettings = {
   fontScale: 'md',
@@ -297,6 +298,30 @@ export default function App() {
       setToastMessage(null);
     }, 3500);
   };
+
+  // Sync shared data with Supabase (per-device prefs like language/active user stay local)
+  const cloudStatus = useCloudSync([
+    { key: 'users', value: users, set: setUsers },
+    { key: 'tasks', value: tasks, set: setTasks },
+    { key: 'leaves', value: leaves, set: setLeaves },
+    { key: 'training', value: trainingLogs, set: setTrainingLogs },
+    { key: 'projects', value: projects, set: setProjects },
+    { key: 'attendance', value: attendanceOverrides, set: setAttendanceOverrides },
+    { key: 'allow_member_deadline', value: allowMemberDeadlineSetup, set: setAllowMemberDeadlineSetup },
+    { key: 'appearance', value: appearanceSettings, set: setAppearanceSettings },
+    { key: 'admin_password', value: adminPassword, set: setAdminPassword },
+  ]);
+
+  // Keep the active user object in step with the (possibly cloud-loaded) users list
+  useEffect(() => {
+    if (users.length === 0) return;
+    const match = users.find((u) => u.id === currentUser?.id);
+    if (!match) {
+      setCurrentUser(users.find((u) => u.roleTier === 'MEMBER') || users[0]);
+    } else if (JSON.stringify(match) !== JSON.stringify(currentUser)) {
+      setCurrentUser(match);
+    }
+  }, [users]);
 
   // Sync with LocalStorage
   useEffect(() => {
@@ -1451,6 +1476,31 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      {/* Cloud sync status */}
+      {cloudStatus !== 'disabled' && (
+        <div
+          className="fixed bottom-5 left-5 z-40 bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-full px-3 py-1.5 flex items-center gap-2 text-[11px] font-semibold text-slate-600"
+          title="Supabase cloud sync"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              cloudStatus === 'synced'
+                ? 'bg-emerald-500'
+                : cloudStatus === 'error'
+                ? 'bg-red-500'
+                : 'bg-amber-400 animate-pulse'
+            }`}
+          />
+          {cloudStatus === 'synced'
+            ? 'Cloud synced'
+            : cloudStatus === 'saving'
+            ? 'Saving…'
+            : cloudStatus === 'connecting'
+            ? 'Connecting…'
+            : 'Offline (local only)'}
+        </div>
+      )}
+
       {/* Toast Notification Popup */}
       {toastMessage && (
         <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 flex items-center gap-3 animate-slideUp text-xs font-semibold">
