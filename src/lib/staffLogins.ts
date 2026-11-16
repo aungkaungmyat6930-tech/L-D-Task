@@ -6,9 +6,9 @@ export const staffLoginsEnabled = !!supabase;
 
 /** Calls the `staff-admin` Edge Function (admin only) to create a login or set a staff member's password. */
 export async function manageStaffLogin(
-  action: 'create' | 'set_password',
+  action: 'create' | 'set_password' | 'ensure_login' | 'delete_login',
   email: string,
-  password: string
+  password = ''
 ): Promise<StaffLoginResult> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
   const { data, error } = await supabase.functions.invoke('staff-admin', {

@@ -169,14 +169,34 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setLoginPassword('');
     setActiveTab('offboard');
 
-    // Members/Viewers sign in with just their email, so nothing else to do.
+    // Members/Viewers sign in with just their email; create their login account now so it
+    // shows in Supabase (Authentication -> Users) straight away.
     if (staffLoginsEnabled && !needsPassword) {
+      setLoginBusy(true);
       setLoginNotice({
         ok: true,
-        text:
-          language === 'my'
-            ? `✅ ${staffName} ကို ထည့်ပြီးပါပြီ။ Password မလိုဘဲ ${cleanEmail} ဖြင့် တိုက်ရိုက် ဝင်ရောက်နိုင်ပါသည်။`
-            : `✅ ${staffName} added. They can sign in with just ${cleanEmail}, no password needed.`,
+        text: language === 'my' ? `${staffName} ကို Supabase ထဲ ထည့်နေသည်...` : `Adding ${staffName} to Supabase...`,
+      });
+      manageStaffLogin('ensure_login', cleanEmail).then((res) => {
+        setLoginBusy(false);
+        setLoginNotice(
+          res.ok
+            ? {
+                ok: true,
+                text:
+                  language === 'my'
+                    ? `✅ ${staffName} ကို ထည့်ပြီး Supabase နှင့် Sync ဖြစ်ပါပြီ။ Password မလိုဘဲ ${cleanEmail} ဖြင့် ဝင်ရောက်နိုင်ပါသည်။`
+                    : `✅ ${staffName} added and synced to Supabase. They can sign in with just ${cleanEmail}.`,
+              }
+            : {
+                ok: false,
+                text:
+                  (language === 'my'
+                    ? `⚠️ ${staffName} ကို စာရင်းသွင်းပြီးပါပြီ (ပထမဆုံး ဝင်ချိန်တွင် Login ဖန်တီးပါမည်)။ Supabase Login ဖန်တီးရာတွင် ပြဿနာ: `
+                    : `⚠️ ${staffName} was added (their login will be created on first sign-in), but creating it now failed: `) +
+                  res.error,
+              }
+        );
       });
     }
 
@@ -790,7 +810,23 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                         : `Permanently delete member "${user.name}"?`,
                                     confirmLabel: language === 'my' ? 'အပြီးပိုင် ဖျက်မည်' : 'Remove Member',
                                     isDestructive: true,
-                                    onConfirm: () => onDeleteUser(user.id),
+                                    onConfirm: () => {
+                                      onDeleteUser(user.id);
+                                      // Also remove their login account from Supabase.
+                                      if (staffLoginsEnabled && user.email) {
+                                        manageStaffLogin('delete_login', user.email).then((res) => {
+                                          if (!res.ok) {
+                                            setLoginNotice({
+                                              ok: false,
+                                              text:
+                                                (language === 'my'
+                                                  ? `⚠️ ${user.name} ကို ဖျက်ပြီးပါပြီ၊ သို့သော် Supabase Login ဖျက်ရာတွင် ပြဿနာ: `
+                                                  : `⚠️ ${user.name} was removed, but deleting their Supabase login failed: `) + res.error,
+                                            });
+                                          }
+                                        });
+                                      }
+                                    },
                                   })
                                 }
                                 className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition"

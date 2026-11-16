@@ -2,6 +2,9 @@
 //  - email_login (no sign-in needed): Members/Viewers in the staff list sign in with just their email.
 //    Admins/Super Admins are told to use their password instead.
 //  - create / set_password (admins only): create a login with a password, or change it.
+//  - ensure_login (admins only): make sure a staff member has a login account (no password,
+//    for email-only members), so they show in Authentication -> Users right away.
+//  - delete_login (admins only): remove the login account of a deleted staff member.
 // Deploy in Supabase Dashboard -> Edge Functions -> Deploy a new function, name: staff-admin.
 // The service-role key is provided by Supabase automatically; it never reaches the browser.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -92,7 +95,24 @@ Deno.serve(async (req) => {
   const email = norm(body.email);
   const password = body.password ?? '';
   if (!email) return json({ error: 'Email is required.' }, 400);
-  if (password.length < 6) return json({ error: 'Password must be at least 6 characters.' }, 400);
+
+  // Remove the login of a staff member who was deleted from the list.
+  if (body.action === 'delete_login') {
+    if (email === norm(caller.user.email)) return json({ error: 'You cannot delete your own login.' }, 400);
+    try {
+      const existing = await findAuthUser(email);
+      if (!existing) return json({ ok: true, deleted: false });
+      const { error } = await admin.auth.admin.deleteUser(existing.id);
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true, deleted: true });
+    } catch (e) {
+      return json({ error: (e as Error).message ?? 'Something went wrong.' }, 500);
+    }
+  }
+
+  if (body.action !== 'ensure_login' && password.length < 6) {
+    return json({ error: 'Password must be at least 6 characters.' }, 400);
+  }
 
   // 2. The target must be an active staff member. A just-added profile can take a moment
   //    to reach the database, so wait briefly for it.
@@ -107,6 +127,17 @@ Deno.serve(async (req) => {
 
   try {
     const existing = await findAuthUser(email);
+
+    if (body.action === 'ensure_login') {
+      if (existing) return json({ ok: true, created: false });
+      const { error } = await admin.auth.admin.createUser({
+        email,
+        password: crypto.randomUUID() + crypto.randomUUID(),
+        email_confirm: true,
+      });
+      if (error) return json({ error: error.message }, 400);
+      return json({ ok: true, created: true });
+    }
 
     if (body.action === 'create') {
       if (existing) {

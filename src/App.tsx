@@ -481,12 +481,13 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
   }, [authProfile, authIsAdmin]);
 
   // Keep the active user in step with the user list (e.g. after edits from another browser).
+  // Uses the latest value so it never undoes a switch made in the same update (e.g. on sign-in).
   useEffect(() => {
-    if (!currentUser) return;
-    const refreshed = users.find((u) => u.id === currentUser.id);
-    if (refreshed && JSON.stringify(refreshed) !== JSON.stringify(currentUser)) {
-      setCurrentUser(refreshed);
-    }
+    setCurrentUser((prev) => {
+      if (!prev) return prev;
+      const refreshed = users.find((u) => u.id === prev.id);
+      return refreshed && JSON.stringify(refreshed) !== JSON.stringify(prev) ? refreshed : prev;
+    });
   }, [users]);
 
   // Auto-evaluate Overdue Tasks
