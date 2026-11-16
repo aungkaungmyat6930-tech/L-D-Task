@@ -4,18 +4,10 @@ import { Language, TRANSLATIONS } from '../utils/translations';
 import { isSuperAdmin, isAdminOrSuper } from '../utils/roleHelpers';
 import { processBannerImageFile } from '../utils/imageUpload';
 import { 
-  Users, 
-  Calendar, 
-  CheckSquare, 
-  CalendarDays, 
-  Clock, 
-  FolderKanban, 
   UserPen, 
   Network, 
   RotateCcw,
   Globe,
-  ShieldCheck,
-  Crown,
   User,
   Eye,
   AlertTriangle,
@@ -27,6 +19,16 @@ import {
   Pencil,
   Camera
 } from 'lucide-react';
+import {
+  Icon3DTeamDirectory,
+  Icon3DTasks,
+  Icon3DLeaveCalendar,
+  Icon3DTrainingClock,
+  Icon3DWeeklyBoard,
+  Icon3DProjects,
+  Icon3DCrown,
+  Icon3DShield,
+} from './Icons3D';
 
 interface HeaderProps {
   currentUser: UserProfile;
@@ -293,13 +295,13 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
                 <span className="truncate">{currentUser.name}</span>
                 {isSuper ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-extrabold">
-                    <Crown className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-extrabold">
+                    <Icon3DCrown className="w-3.5 h-3.5" />
                     <span>Super Admin</span>
                   </span>
                 ) : isAnyAdmin ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 text-[10px] font-extrabold">
-                    <ShieldCheck className="w-3 h-3" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 text-[10px] font-extrabold">
+                    <Icon3DShield className="w-3.5 h-3.5" />
                     <span>Admin</span>
                   </span>
                 ) : currentUser.roleTier === 'VIEWER' ? (
@@ -458,26 +460,26 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onSelectTab('directory')}
               style={currentTab === 'directory' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'directory'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Users className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DTeamDirectory className="w-4 h-4 shrink-0" />
               <span>{t.tabDirectory}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('tasks')}
               style={currentTab === 'tasks' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'tasks'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <CheckSquare className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DTasks className="w-4 h-4 shrink-0" />
               <span>{t.tabTasks}</span>
               {overdueTasksCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-red-500 text-white font-bold rounded-full">
@@ -497,13 +499,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onSelectTab('leave')}
               style={currentTab === 'leave' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'leave'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DLeaveCalendar className="w-4 h-4 shrink-0" />
               <span>{t.tabLeave}</span>
               {pendingLeavesCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-amber-500 text-slate-950 font-bold rounded-full">
@@ -515,39 +517,39 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onSelectTab('training')}
               style={currentTab === 'training' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'training'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DTrainingClock className="w-4 h-4 shrink-0" />
               <span>{t.tabTraining}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('weekly')}
               style={currentTab === 'weekly' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'weekly'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DWeeklyBoard className="w-4 h-4 shrink-0" />
               <span>{t.tabWeekly}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('projects')}
               style={currentTab === 'projects' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'projects'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <FolderKanban className="w-3.5 h-3.5 shrink-0" />
+              <Icon3DProjects className="w-4 h-4 shrink-0" />
               <span>{t.tabProjects}</span>
             </button>
           </div>

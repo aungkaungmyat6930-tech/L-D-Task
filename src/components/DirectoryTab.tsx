@@ -14,16 +14,23 @@ import { getMemberHoursForTrainingLog } from '../utils/trainingHelpers';
 import { exportAllMembersMonthlyExcel } from '../utils/excelExport';
 import { isAdminOrSuper } from '../utils/roleHelpers';
 import { 
-  Users, 
   ArrowRight, 
   UserPen, 
   UserPlus, 
   Plus,
-  FileSpreadsheet,
   BellRing,
-  Bell,
-  Crown
+  Bell
 } from 'lucide-react';
+import {
+  Icon3DTeamDirectory,
+  Icon3DExcel,
+  Icon3DCrown,
+  Icon3DShield,
+  Icon3DTasks,
+  Icon3DOffice,
+  Icon3DLeaveCalendar,
+  Icon3DTrainingClock,
+} from './Icons3D';
 
 interface DirectoryTabProps {
   allUsers: UserProfile[];
@@ -95,15 +102,19 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
     <div className="space-y-6 animate-fadeIn">
       {/* Team Member Cards Grid */}
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-600" />
-              <span>{language === 'my' ? 'L&D အဖွဲ့ဝင်များနှင့် ကိုယ်ပိုင်မှတ်တမ်းကတ်များ' : 'L&D Team Directory & Member Sheets'}</span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              {language === 'my' ? 'ကတ်တစ်ခုချင်းစီကို နှိပ်၍ အသေးစိတ် Sheet တွင် Profile, Task, Leave, Training များကို တန်းပြင်နိုင်ပါသည်' : 'Click any card to open the interactive Member Sheet and edit records directly'}
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/80 backdrop-blur-sm p-3.5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="icon-3d-float shrink-0">
+              <Icon3DTeamDirectory className="w-10 h-10" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900">
+                {language === 'my' ? 'L&D အဖွဲ့ဝင်များနှင့် ကိုယ်ပိုင်မှတ်တမ်းကတ်များ' : 'L&D Team Directory & Member Sheets'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                {language === 'my' ? 'ကတ်တစ်ခုချင်းစီကို နှိပ်၍ အသေးစိတ် Sheet တွင် Profile, Task, Leave, Training များကို တန်းပြင်နိုင်ပါသည်' : 'Click any card to open the interactive Member Sheet and edit records directly'}
+              </p>
+            </div>
           </div>
 
           {/* Admin Staff In/Out, Month Selector, Team Excel Export & Filter Tabs */}
@@ -111,14 +122,14 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
             {isAdmin && (
               <button
                 onClick={onOpenAddUser}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
+                className="cube-3d-tile flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-b from-blue-500 to-blue-600 hover:from-blue-400 hover:to-blue-600 rounded-xl border border-blue-400/40 whitespace-nowrap"
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>{language === 'my' ? 'ဝန်ထမ်းအဝင်/အထွက် (Admin)' : 'Staff In/Out Portal'}</span>
               </button>
             )}
 
-            <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-xl shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl shadow-2xs">
               <input
                 type="month"
                 value={reportMonth}
@@ -131,18 +142,18 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
               <button
                 type="button"
                 onClick={handleExportAllExcel}
-                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition shadow-2xs"
+                className="cube-3d-tile flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-600 rounded-lg whitespace-nowrap"
                 title={language === 'my' ? 'အဖွဲ့တစ်ခုလုံး၏ ရုံးတက် & ခွင့် Excel ထုတ်ရန်' : 'Export Team Attendance & Leave Excel (.xlsx)'}
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>{language === 'my' ? 'Team Excel (.xlsx)' : 'Team Excel (.xlsx)'}</span>
+                <Icon3DExcel className="w-4 h-4" />
+                <span>Team Excel (.xlsx)</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200/80">
               <button
                 onClick={() => setMemberFilter('all')}
-                className={`px-3 py-1 rounded-lg transition ${
+                className={`px-3 py-1.5 rounded-lg transition ${
                   memberFilter === 'all'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -152,25 +163,23 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
               </button>
               <button
                 onClick={() => setMemberFilter('active')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-lg transition ${
                   memberFilter === 'active'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-emerald-700 hover:bg-emerald-50'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span>{language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (အဝင်)' : 'Active (In)'} ({activeMembersCount})</span>
+                {language === 'my' ? 'တာဝန်ထမ်းဆောင်ဆဲ (အဝင်)' : 'Active (In)'} ({activeMembersCount})
               </button>
               <button
                 onClick={() => setMemberFilter('resigned')}
-                className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
+                className={`px-3 py-1.5 rounded-lg transition ${
                   memberFilter === 'resigned'
                     ? 'bg-red-600 text-white shadow-xs'
                     : 'text-red-700 hover:bg-red-50'
                 }`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                <span>{language === 'my' ? 'နုတ်ထွက်ပြီး (အထွက်)' : 'Resigned (Out)'} ({resignedMembersCount})</span>
+                {language === 'my' ? 'နုတ်ထွက်ပြီး (အထွက်)' : 'Resigned (Out)'} ({resignedMembersCount})
               </button>
             </div>
           </div>
@@ -214,26 +223,28 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
               <div
                 key={user.id}
                 onClick={() => onOpenMemberSheet(user)}
-                className={`bg-white p-4 rounded-xl border transition-all cursor-pointer hover:shadow-md flex flex-col justify-between ${
+                className={`member-3d-card group p-4 rounded-2xl border cursor-pointer flex flex-col justify-between ${
                   isResigned
-                    ? 'border-red-200 bg-red-50/10'
+                    ? 'border-red-200 bg-gradient-to-b from-white to-red-50/40'
                     : isMe
-                    ? 'border-amber-400 ring-2 ring-amber-400/20 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'border-amber-400 bg-gradient-to-b from-white via-amber-50/20 to-amber-50/40 ring-2 ring-amber-400/25'
+                    : 'border-slate-200/90 bg-gradient-to-b from-white to-slate-50/60 hover:border-blue-300'
                 }`}
               >
                 <div>
-                  {/* Avatar & Badges */}
+                  {/* Avatar & 3D Role Indicator */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="relative">
-                      <img
-                        src={user.avatar}
-                        alt={user.name}
-                        referrerPolicy="no-referrer"
-                        className="w-12 h-12 rounded-full border-2 border-amber-400 object-cover shadow-sm bg-slate-100"
-                      />
+                      <div className="w-14 h-14 rounded-2xl p-0.5 bg-gradient-to-br from-amber-300 via-amber-400 to-orange-400 shadow-md">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full rounded-[13px] object-cover bg-slate-100"
+                        />
+                      </div>
                       <span
-                        className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                        className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs ${
                           isResigned ? 'bg-red-500' : 'bg-emerald-500'
                         }`}
                         title={isResigned ? 'Resigned' : 'Active'}
@@ -242,51 +253,51 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
 
                     <div className="flex flex-col items-end gap-1">
                       <span
-                        className={`text-[9px] font-extrabold px-2 py-0.5 rounded inline-flex items-center gap-1 ${
+                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg inline-flex items-center gap-1 shadow-2xs ${
                           user.roleTier === 'SUPER_ADMIN'
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            ? 'bg-gradient-to-b from-amber-100 to-amber-200/80 text-amber-950 border border-amber-300'
                             : user.roleTier === 'ADMIN'
-                            ? 'bg-purple-100 text-purple-800'
+                            ? 'bg-gradient-to-b from-purple-100 to-purple-200/70 text-purple-900 border border-purple-200'
                             : user.roleTier === 'VIEWER'
-                            ? 'bg-slate-100 text-slate-600'
-                            : 'bg-blue-100 text-blue-800'
+                            ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                            : 'bg-gradient-to-b from-blue-50 to-blue-100/80 text-blue-800 border border-blue-200'
                         }`}
                       >
-                        {user.roleTier === 'SUPER_ADMIN' && <Crown className="w-2.5 h-2.5 text-amber-700" />}
-                        <span>{user.roleTier === 'SUPER_ADMIN' ? 'SUPER ADMIN' : user.roleTier}</span>
+                        {user.roleTier === 'SUPER_ADMIN' && <Icon3DCrown className="w-3.5 h-3.5" />}
+                        {user.roleTier === 'ADMIN' && <Icon3DShield className="w-3.5 h-3.5" />}
+                        <span>{user.roleTier === 'SUPER_ADMIN' ? 'Super Admin' : user.roleTier === 'ADMIN' ? 'Admin' : user.roleTier === 'VIEWER' ? 'Viewer' : 'Member'}</span>
                       </span>
                       {isResigned ? (
-                        <span className="text-[9px] font-bold bg-red-100 text-red-800 border border-red-300 px-1.5 py-0.2 rounded">
+                        <span className="text-[10px] font-bold text-red-700">
                           {language === 'my' ? 'နုတ်ထွက်ပြီး' : 'Resigned'}
                         </span>
                       ) : isMe ? (
-                        <span className="text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.2 rounded">
-                          {language === 'my' ? 'သင့်အကောင့်' : 'You'}
+                        <span className="text-[10px] font-extrabold text-amber-700">
+                          {language === 'my' ? '· သင့်အကောင့်' : '· You'}
                         </span>
                       ) : null}
                     </div>
                   </div>
 
-                  {/* Name & Overdue + Near Deadline Noti + Titles */}
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5 min-w-0 flex-wrap">
+                  {/* Name & Overdue + Near Deadline Alerts */}
+                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5 min-w-0 flex-wrap">
                     <span className="truncate">{user.name}</span>
                     {uOverdueCount > 0 && (
                       <span
-                        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-extrabold shadow-xs tabular-nums"
+                        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-md bg-red-600 text-white text-[10px] font-extrabold shadow-xs tabular-nums"
                         title={
                           language === 'my'
                             ? `${user.name} တွင် ရက်ကျော်လွန်နေသော Task ${uOverdueCount} ခု ရှိပါသည်`
                             : `${user.name} has ${uOverdueCount} overdue task(s)`
                         }
                       >
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-300 animate-pulse" />
                         <BellRing className="w-2.5 h-2.5" />
                         <span>{uOverdueCount}</span>
                       </span>
                     )}
                     {uDueSoonCount > 0 && (
                       <span
-                        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-extrabold shadow-2xs tabular-nums"
+                        className="inline-flex items-center gap-1 shrink-0 px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold tabular-nums"
                         title={
                           language === 'my'
                             ? `${user.name} တွင် Deadline နီးနေသော Task ${uDueSoonCount} ခု ရှိပါသည်`
@@ -300,57 +311,67 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                       </span>
                     )}
                   </h4>
-                  <p className="text-[11px] text-slate-500 truncate">{user.roleLabel}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{user.dept || 'L&D Dept'}</p>
+                  <p className="text-xs text-slate-600 font-medium truncate mt-0.5">{user.roleLabel}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{user.dept || 'L&D Dept'}</p>
                 </div>
 
-                {/* Micro Stats Bar: Tasks, Office Days, Leave Days, Training Hours */}
-                <div className="mt-3 pt-2.5 border-t border-slate-100 grid grid-cols-4 gap-1 text-center">
-                  <div className="bg-blue-50/60 p-1 rounded-md">
-                    <span className="text-[9px] text-blue-600 font-bold uppercase block">
+                {/* Tactile 3D Mini Stat Bar: Tasks, Office, Leave, Hours */}
+                <div className="mt-3.5 pt-3 border-t border-slate-200/80 grid grid-cols-4 gap-1.5 text-center">
+                  <div className="bg-gradient-to-b from-blue-50/90 to-blue-100/50 border border-blue-200/70 p-1.5 rounded-xl flex flex-col items-center">
+                    <Icon3DTasks className="w-4 h-4 mb-0.5" />
+                    <span className="text-[9px] text-blue-700 font-bold leading-none">
                       Tasks
                     </span>
-                    <span className="text-xs font-extrabold text-blue-900 tabular-nums">
+                    <span className="text-xs font-black text-blue-950 tabular-nums mt-0.5">
                       {uTasks.length}
                     </span>
                   </div>
-                  <div className="bg-emerald-50/70 p-1 rounded-md" title={language === 'my' ? `${reportMonth} ရုံးတက်ရက်` : `${reportMonth} Office Days`}>
-                    <span className="text-[9px] text-emerald-700 font-bold uppercase block">
+                  <div
+                    className="bg-gradient-to-b from-emerald-50/90 to-emerald-100/50 border border-emerald-200/70 p-1.5 rounded-xl flex flex-col items-center"
+                    title={language === 'my' ? `${reportMonth} ရုံးတက်ရက်` : `${reportMonth} Office Days`}
+                  >
+                    <Icon3DOffice className="w-4 h-4 mb-0.5" />
+                    <span className="text-[9px] text-emerald-700 font-bold leading-none">
                       {language === 'my' ? 'ရုံးတက်' : 'Office'}
                     </span>
-                    <span className="text-xs font-extrabold text-emerald-900 tabular-nums">
+                    <span className="text-xs font-black text-emerald-950 tabular-nums mt-0.5">
                       {uAttendance.officePresentDays}d
                     </span>
                   </div>
-                  <div className="bg-teal-50/60 p-1 rounded-md" title={language === 'my' ? `${reportMonth} ခွင့်ရက်` : `${reportMonth} Leave Days`}>
-                    <span className="text-[9px] text-teal-600 font-bold uppercase block">
+                  <div
+                    className="bg-gradient-to-b from-teal-50/90 to-teal-100/50 border border-teal-200/70 p-1.5 rounded-xl flex flex-col items-center"
+                    title={language === 'my' ? `${reportMonth} ခွင့်ရက်` : `${reportMonth} Leave Days`}
+                  >
+                    <Icon3DLeaveCalendar className="w-4 h-4 mb-0.5" />
+                    <span className="text-[9px] text-teal-700 font-bold leading-none">
                       {language === 'my' ? 'ခွင့်' : 'Leave'}
                     </span>
-                    <span className="text-xs font-extrabold text-teal-900 tabular-nums">
+                    <span className="text-xs font-black text-teal-950 tabular-nums mt-0.5">
                       {uAttendance.approvedLeaveDaysInMonth}d
                     </span>
                   </div>
-                  <div className="bg-purple-50/60 p-1 rounded-md">
-                    <span className="text-[9px] text-purple-600 font-bold uppercase block">
+                  <div className="bg-gradient-to-b from-purple-50/90 to-purple-100/50 border border-purple-200/70 p-1.5 rounded-xl flex flex-col items-center">
+                    <Icon3DTrainingClock className="w-4 h-4 mb-0.5" />
+                    <span className="text-[9px] text-purple-700 font-bold leading-none">
                       Hours
                     </span>
-                    <span className="text-xs font-extrabold text-purple-900 tabular-nums">
+                    <span className="text-xs font-black text-purple-950 tabular-nums mt-0.5">
                       {uHours.toFixed(0)}h
                     </span>
                   </div>
                 </div>
 
-                {/* Direct Leave & Topic actions; Tasks are added inside the Member Sheet */}
-                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-1.5">
+                {/* Direct Leave & Topic 3D Action Buttons */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center gap-2">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onOpenAddLeave(user);
                     }}
-                    className="flex-1 py-1.5 px-1 bg-teal-50 hover:bg-teal-600 text-teal-700 hover:text-white font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-0.5 border border-teal-200 hover:border-teal-600 shadow-xs"
+                    className="cube-3d-tile flex-1 py-1.5 px-2 bg-gradient-to-b from-teal-50 to-teal-100/80 hover:from-teal-500 hover:to-teal-600 text-teal-800 hover:text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1 border border-teal-200 hover:border-teal-600"
                     title={`+ Submit Leave for ${user.name}`}
                   >
-                    <Plus className="w-3 h-3 shrink-0" />
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
                     <span>Leave</span>
                   </button>
 
@@ -359,19 +380,19 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                       e.stopPropagation();
                       onOpenAddTraining(user);
                     }}
-                    className="flex-1 py-1.5 px-1 bg-purple-50 hover:bg-purple-700 text-purple-700 hover:text-white font-bold rounded-lg text-[10px] transition flex items-center justify-center gap-0.5 border border-purple-200 hover:border-purple-700 shadow-xs"
+                    className="cube-3d-tile flex-1 py-1.5 px-2 bg-gradient-to-b from-purple-50 to-purple-100/80 hover:from-purple-600 hover:to-purple-700 text-purple-800 hover:text-white font-bold rounded-xl text-[11px] flex items-center justify-center gap-1 border border-purple-200 hover:border-purple-700"
                     title={`+ Log Training Topic for ${user.name}`}
                   >
-                    <Plus className="w-3 h-3 shrink-0" />
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
                     <span>Topic</span>
                   </button>
                 </div>
 
                 {/* Card Action Link & Edit Profile Shortcut */}
-                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-600">
-                  <span className="flex items-center gap-1 hover:underline">
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-600">
+                  <span className="flex items-center gap-1 group-hover:underline">
                     {language === 'my' ? 'Sheet ဖွင့်ရန်' : 'Open Sheet'}
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>
 
                   {(isMe || isAdmin) && (
@@ -380,7 +401,7 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                         e.stopPropagation();
                         onOpenEditProfile(user);
                       }}
-                      className="text-[10px] text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded flex items-center gap-1 transition"
+                      className="text-[11px] text-amber-800 bg-gradient-to-b from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 border border-amber-300/80 px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-2xs"
                       title={`Edit profile for ${user.name}`}
                     >
                       <UserPen className="w-3 h-3" />
