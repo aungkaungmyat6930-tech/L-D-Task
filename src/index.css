@@ -151,6 +151,34 @@
   transform: translateY(-2px) scale(1.06);
 }
 
+.glass-showcase-stage {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(251, 191, 36, 0.22), transparent 42%),
+    radial-gradient(circle at 86% 22%, rgba(56, 189, 248, 0.22), transparent 44%),
+    radial-gradient(circle at 50% 92%, rgba(167, 139, 250, 0.18), transparent 48%),
+    linear-gradient(135deg, #e2e8f0 0%, #f1ece6 48%, #dbeafe 100%);
+}
+
+.glass-member-card {
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 20px 40px -16px rgba(15, 23, 42, 0.18),
+    0 2px 8px -2px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.92);
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1), background 0.24s ease;
+}
+
+.glass-member-card:hover {
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 28px 50px -16px rgba(15, 23, 42, 0.24),
+    0 6px 16px -4px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheet-3d-shell {
     animation: none;
@@ -160,6 +188,7 @@
   .row-3d-card,
   .kpi-3d-card,
   .member-3d-card,
+  .glass-member-card,
   .icon-3d-float {
     transition: none;
     transform: none !important;
