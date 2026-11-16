@@ -30,6 +30,7 @@ interface UserManagementModalProps {
   allUsers: UserProfile[];
   onAddUser: (user: Partial<UserProfile>) => void;
   onUpdateUserStatus: (userId: string, newStatus: MemberStatus) => void;
+  onUpdateUserRole?: (userId: string, newRole: RoleTier) => void;
   onDeleteUser: (userId: string) => void;
   onOpenEditProfile: (user: UserProfile) => void;
   onOpenChangeAdminPassword?: () => void;
@@ -43,6 +44,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   allUsers,
   onAddUser,
   onUpdateUserStatus,
+  onUpdateUserRole,
   onDeleteUser,
   onOpenEditProfile,
   onOpenChangeAdminPassword,
@@ -713,6 +715,43 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
 
                           <td className="p-3">
                             <span className="block font-medium text-slate-800">{user.roleLabel}</span>
+                            {onUpdateUserRole && !isResigned ? (
+                              <select
+                                value={user.roleTier}
+                                disabled={user.id === currentUser.id}
+                                title={
+                                  user.id === currentUser.id
+                                    ? language === 'my'
+                                      ? 'ကိုယ့် Role ကို ကိုယ်တိုင် ပြောင်း၍ မရပါ'
+                                      : "You can't change your own role"
+                                    : language === 'my'
+                                      ? 'Role ပြောင်းရန်'
+                                      : 'Change role'
+                                }
+                                onChange={(e) => {
+                                  const newRole = e.target.value as RoleTier;
+                                  onUpdateUserRole(user.id, newRole);
+                                  // Admins sign in with a password: ask for one when promoting.
+                                  if (staffLoginsEnabled && user.email && isAdminOrSuper(newRole) && !isAdminOrSuper(user.roleTier)) {
+                                    setPwEditUserId(user.id);
+                                    setPwEditValue('');
+                                    setLoginNotice({
+                                      ok: true,
+                                      text:
+                                        language === 'my'
+                                          ? `🔑 ${user.name} သည် Admin ဖြစ်သွားပြီဖြစ်၍ Password ဖြင့် ဝင်ရပါမည်။ အောက်တွင် Password သတ်မှတ်ပေးပါ။`
+                                          : `🔑 ${user.name} is now an admin and must sign in with a password. Set one below.`,
+                                    });
+                                  }
+                                }}
+                                className="mt-1 text-[10px] font-bold px-1.5 py-0.5 border border-purple-300 bg-purple-50 text-purple-900 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
+                              >
+                                <option value="SUPER_ADMIN">👑 Super Admin</option>
+                                <option value="ADMIN">🔐 Admin</option>
+                                <option value="MEMBER">👤 Member</option>
+                                <option value="VIEWER">👁 Viewer</option>
+                              </select>
+                            ) : null}
                             <span className="block text-[10px] text-slate-500">{user.dept}</span>
                           </td>
 

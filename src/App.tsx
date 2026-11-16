@@ -9,7 +9,8 @@ import {
   MemberStatus,
   AttendanceRecord,
   AttendanceOverrideStatus,
-  AppearanceSettings
+  AppearanceSettings,
+  RoleTier
 } from './types';
 import { 
   INITIAL_USERS, 
@@ -1473,6 +1474,37 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
   };
 
   // Update Member Status (Onboard / Offboard / Resign - Admin / Super Admin Only)
+  // Change a staff member's role from the Staff In/Out portal (admins only).
+  const handleUpdateUserRole = (userId: string, newRole: RoleTier) => {
+    if (!isAdminOrSuper(currentUser.roleTier)) return;
+    const target = users.find((u) => u.id === userId);
+    if (!target || target.roleTier === newRole) return;
+    const isMe = userId === currentUser.id || (authProfile && userId === authProfile.id);
+    if (isMe) {
+      showToast(
+        language === 'my'
+          ? 'ကိုယ့် Role ကို ကိုယ်တိုင် ပြောင်း၍ မရပါ။ အခြား Admin တစ်ဦးကို ပြောင်းခိုင်းပါ။'
+          : "You can't change your own role. Ask another admin."
+      );
+      return;
+    }
+    const activeSupers = users.filter((u) => u.roleTier === 'SUPER_ADMIN' && u.status !== 'Resigned');
+    if (target.roleTier === 'SUPER_ADMIN' && newRole !== 'SUPER_ADMIN' && activeSupers.length <= 1) {
+      showToast(
+        language === 'my'
+          ? 'Super Admin အနည်းဆုံး တစ်ဦး ရှိရပါမည် (ခွင့်ခွင့်ပြုရန် လိုအပ်သည်)။'
+          : 'At least one Super Admin is required (needed for leave approval).'
+      );
+      return;
+    }
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, roleTier: newRole } : u)));
+    showToast(
+      language === 'my'
+        ? `${target.name} ၏ Role ကို ${newRole} သို့ ပြောင်းပြီးပါပြီ။`
+        : `${target.name} is now ${newRole}.`
+    );
+  };
+
   const handleUpdateMemberStatus = (userId: string, newStatus: MemberStatus) => {
     if (!isAdminOrSuper(currentUser.roleTier)) {
       showToast(
@@ -2023,6 +2055,7 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
         allUsers={users}
         onAddUser={handleAddUser}
         onUpdateUserStatus={handleUpdateMemberStatus}
+        onUpdateUserRole={handleUpdateUserRole}
         onDeleteUser={handleDeleteUser}
         onOpenEditProfile={handleOpenEditProfile}
         onOpenChangeAdminPassword={() => {
