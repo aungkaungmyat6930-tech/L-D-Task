@@ -21,6 +21,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
+import { manageStaffLogin, staffLoginsEnabled } from '../lib/staffLogins';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -64,6 +65,12 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   const [roleTier, setRoleTier] = useState<RoleTier>('MEMBER');
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [loginPassword, setLoginPassword] = useState('');
+  // Result of the last login action (create / set password), shown as a banner.
+  const [loginNotice, setLoginNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [pwEditUserId, setPwEditUserId] = useState<string | null>(null);
+  const [pwEditValue, setPwEditValue] = useState('');
   const [phone, setPhone] = useState('');
   const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
   const [avatar, setAvatar] = useState(
@@ -128,7 +135,17 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       );
       return;
     }
+    if (staffLoginsEnabled && loginPassword.length < 6) {
+      setEmailError(
+        language === 'my'
+          ? 'Login Password သည် အနည်းဆုံး စာလုံး ၆ လုံး ရှိရပါမည်။'
+          : 'Login password must be at least 6 characters.'
+      );
+      return;
+    }
     setEmailError(null);
+    const staffName = name.trim();
+    const startPassword = loginPassword;
 
     onAddUser({
       name: name.trim(),
@@ -148,7 +165,63 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setRoleLabel('');
     setEmail('');
     setPhone('');
+    setLoginPassword('');
     setActiveTab('offboard');
+
+    // Create the staff member's login straight away (Supabase Edge Function, admin only).
+    if (staffLoginsEnabled) {
+      setLoginBusy(true);
+      setLoginNotice({
+        ok: true,
+        text: language === 'my' ? `${staffName} အတွက် Login ဖန်တီးနေသည်...` : `Creating login for ${staffName}...`,
+      });
+      manageStaffLogin('create', cleanEmail, startPassword).then((res) => {
+        setLoginBusy(false);
+        setLoginNotice(
+          res.ok
+            ? {
+                ok: true,
+                text:
+                  language === 'my'
+                    ? `✅ ${staffName} ၏ Login ဖန်တီးပြီးပါပြီ။ Email: ${cleanEmail} နှင့် သတ်မှတ်ထားသော Password ဖြင့် ဝင်ရောက်နိုင်ပါသည်။`
+                    : `✅ Login created for ${staffName}. They can sign in now with ${cleanEmail} and the password you set.`,
+              }
+            : {
+                ok: false,
+                text:
+                  (language === 'my' ? `⚠️ ${staffName} ကို စာရင်းသွင်းပြီးသော်လည်း Login မဖန်တီးနိုင်ပါ: ` : `⚠️ ${staffName} was added, but the login was not created: `) +
+                  res.error,
+              }
+        );
+      });
+    }
+  };
+
+  const savePassword = async (user: UserProfile) => {
+    if (!user.email) return;
+    if (pwEditValue.length < 6) {
+      setLoginNotice({
+        ok: false,
+        text: language === 'my' ? 'Password သည် အနည်းဆုံး စာလုံး ၆ လုံး ရှိရပါမည်။' : 'Password must be at least 6 characters.',
+      });
+      return;
+    }
+    setLoginBusy(true);
+    const res = await manageStaffLogin('set_password', user.email, pwEditValue);
+    setLoginBusy(false);
+    if (res.ok) {
+      setPwEditUserId(null);
+      setPwEditValue('');
+      setLoginNotice({
+        ok: true,
+        text:
+          language === 'my'
+            ? `✅ ${user.name} ၏ Password ကို သတ်မှတ်ပြီးပါပြီ။`
+            : `✅ Password set for ${user.name}. They can sign in with ${user.email}.`,
+      });
+    } else {
+      setLoginNotice({ ok: false, text: `⚠️ ${res.error}` });
+    }
   };
 
   const sampleAvatars = [
@@ -365,8 +438,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 ) : (
                   <p className="mt-1 text-[11px] text-slate-500">
                     {language === 'my'
-                      ? 'ဝန်ထမ်းသည် ဤ Email ဖြင့် "Create account" နှိပ်၍ Password သတ်မှတ်ပြီး ဝင်ရောက်နိုင်ပါသည်။'
-                      : 'They sign in by choosing "Create account" with this email and setting a password.'}
+                      ? 'ဝန်ထမ်းသည် ဤ Email ဖြင့် Login ဝင်ရပါမည်။'
+                      : 'The staff member signs in with this email.'}
                   </p>
                 )}
               </div>
@@ -384,6 +457,31 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 />
               </div>
             </div>
+
+            {staffLoginsEnabled && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <label className="block text-xs font-bold text-blue-900 mb-1">
+                  <KeyRound className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                  {language === 'my' ? 'Login Password (စတင်အသုံးပြုရန်)' : 'Starting login password'}{' '}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  autoComplete="off"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder={language === 'my' ? 'အနည်းဆုံး စာလုံး ၆ လုံး' : 'At least 6 characters'}
+                  className="w-full sm:max-w-xs text-xs px-3 py-2 border border-blue-300 bg-white rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="mt-1 text-[11px] text-blue-800">
+                  {language === 'my'
+                    ? 'သိမ်းလိုက်သည်နှင့် Login အလိုအလျောက် ဖန်တီးပါမည်။ ဤ Email နှင့် Password ကို ဝန်ထမ်းထံ ပေးပါ။ ဝန်ထမ်းက ဝင်ပြီးနောက် "Password" ခလုတ်ဖြင့် ပြောင်းနိုင်ပါသည်။'
+                    : 'The login is created as soon as you save. Give this email and password to the staff member; they can change it later with the "Password" button.'}
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -471,6 +569,22 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         {/* Tab 2: Staff Roster & Offboarding Management */}
         {activeTab === 'offboard' && (
           <div className="p-6 space-y-4 overflow-y-auto">
+            {loginNotice && (
+              <div
+                className={`flex items-start justify-between gap-3 text-xs font-semibold rounded-lg px-3 py-2 border ${
+                  loginNotice.ok
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+              >
+                <span>{loginNotice.text}</span>
+                {!loginBusy && (
+                  <button type="button" onClick={() => setLoginNotice(null)} className="shrink-0 opacity-60 hover:opacity-100">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
             {/* Search and Filter */}
             <div className="flex flex-wrap items-center justify-between gap-2.5">
               <div className="relative flex-grow max-w-xs">
@@ -538,7 +652,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                       const isResigned = user.status === 'Resigned';
 
                       return (
-                        <tr key={user.id} className="hover:bg-slate-50 transition">
+                        <React.Fragment key={user.id}>
+                        <tr className="hover:bg-slate-50 transition">
                           <td className="p-3 font-semibold text-slate-900">
                             <div className="flex items-center gap-2.5">
                               <img
@@ -614,6 +729,25 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 </button>
                               )}
 
+                              {/* Set / reset login password */}
+                              {staffLoginsEnabled && user.email && !isResigned && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPwEditUserId(pwEditUserId === user.id ? null : user.id);
+                                    setPwEditValue('');
+                                  }}
+                                  className={`p-1 rounded transition ${
+                                    pwEditUserId === user.id
+                                      ? 'text-blue-700 bg-blue-100'
+                                      : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50'
+                                  }`}
+                                  title={language === 'my' ? 'Login Password သတ်မှတ်ရန်' : 'Set login password'}
+                                >
+                                  <KeyRound className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
                               {/* Edit Profile */}
                               <button
                                 type="button"
@@ -647,6 +781,48 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                             </div>
                           </td>
                         </tr>
+                        {pwEditUserId === user.id && (
+                          <tr className="bg-blue-50/60">
+                            <td colSpan={4} className="px-3 py-2.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] font-bold text-blue-900">
+                                  {language === 'my' ? `${user.name} ၏ Login Password အသစ်:` : `New login password for ${user.name}:`}
+                                </span>
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  autoComplete="off"
+                                  value={pwEditValue}
+                                  onChange={(e) => setPwEditValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      savePassword(user);
+                                    }
+                                  }}
+                                  placeholder={language === 'my' ? 'အနည်းဆုံး ၆ လုံး' : 'At least 6 characters'}
+                                  className="text-xs px-2.5 py-1.5 border border-blue-300 rounded-lg font-mono bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                  type="button"
+                                  disabled={loginBusy}
+                                  onClick={() => savePassword(user)}
+                                  className="px-3 py-1.5 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-60"
+                                >
+                                  {loginBusy ? '...' : language === 'my' ? 'သိမ်းမည်' : 'Save'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPwEditUserId(null)}
+                                  className="px-2 py-1.5 text-[11px] font-semibold text-slate-600 hover:text-slate-900"
+                                >
+                                  {language === 'my' ? 'မလုပ်တော့ပါ' : 'Cancel'}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     })
                   )}

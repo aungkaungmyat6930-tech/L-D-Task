@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
+import { changeOwnPassword } from '../lib/staffLogins';
 import { UserProfile, TabType, AppearanceSettings } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { isSuperAdmin, isAdminOrSuper } from '../utils/roleHelpers';
@@ -82,6 +83,26 @@ export const Header: React.FC<HeaderProps> = ({
   overdueTasksCount,
   dueSoonTasksCount,
 }) => {
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwValue, setPwValue] = useState('');
+  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pwBusy, setPwBusy] = useState(false);
+  const submitOwnPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwValue.length < 6) {
+      setPwMsg({ ok: false, text: language === 'my' ? 'အနည်းဆုံး စာလုံး ၆ လုံး ရှိရပါမည်။' : 'At least 6 characters.' });
+      return;
+    }
+    setPwBusy(true);
+    const err = await changeOwnPassword(pwValue);
+    setPwBusy(false);
+    if (err) setPwMsg({ ok: false, text: err });
+    else {
+      setPwValue('');
+      setPwMsg({ ok: true, text: language === 'my' ? 'Password ပြောင်းပြီးပါပြီ။' : 'Password changed.' });
+    }
+  };
+
   const t = TRANSLATIONS[language];
   const isSuper = isSuperAdmin(currentUser.roleTier);
   const isAnyAdmin = isAdminOrSuper(currentUser.roleTier);
@@ -291,6 +312,22 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+          )}
+
+          {/* Change own login password */}
+          {onSignOut && (
+            <button
+              onClick={() => {
+                setPwOpen(true);
+                setPwMsg(null);
+                setPwValue('');
+              }}
+              title={language === 'my' ? 'ကိုယ်ပိုင် Login Password ပြောင်းရန်' : 'Change my login password'}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+              <span className="hidden sm:inline">Password</span>
+            </button>
           )}
 
           {/* Sign out (staff login) */}
@@ -621,6 +658,46 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </nav>
-    </header>
+    
+      {pwOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60" onClick={() => setPwOpen(false)}>
+          <form
+            onSubmit={submitOwnPassword}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-5 space-y-3 text-slate-900"
+          >
+            <h3 className="text-sm font-bold flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-amber-500" />
+              {language === 'my' ? 'Login Password ပြောင်းရန်' : 'Change login password'}
+            </h3>
+            <p className="text-[11px] text-slate-500">{authEmail}</p>
+            <input
+              type="password"
+              autoFocus
+              autoComplete="new-password"
+              value={pwValue}
+              onChange={(e) => setPwValue(e.target.value)}
+              placeholder={language === 'my' ? 'Password အသစ် (အနည်းဆုံး ၆ လုံး)' : 'New password (at least 6 characters)'}
+              className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {pwMsg && (
+              <p className={`text-xs font-semibold ${pwMsg.ok ? 'text-emerald-700' : 'text-red-600'}`}>{pwMsg.text}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setPwOpen(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600">
+                {language === 'my' ? 'ပိတ်ရန်' : 'Close'}
+              </button>
+              <button
+                type="submit"
+                disabled={pwBusy}
+                className="px-3 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg disabled:opacity-60"
+              >
+                {pwBusy ? '...' : language === 'my' ? 'သိမ်းမည်' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+</header>
   );
 };
