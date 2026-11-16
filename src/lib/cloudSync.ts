@@ -24,9 +24,17 @@ export const GUEST_WRITABLE_KEYS = ['tasks', 'leaves', 'training', 'attendance',
  * and applies changes made in other browsers via Realtime.
  * localStorage keeps working as an offline cache alongside this.
  */
-export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } = {}): CloudStatus {
+export function useCloudSync(
+  slices: CloudSlice[],
+  options: { guest?: boolean } = {}
+): { status: CloudStatus; error: string | null } {
   const guest = !!options.guest;
-  const [status, setStatus] = useState<CloudStatus>(supabase ? 'loading' : 'disabled');
+  const [status, setStatusRaw] = useState<CloudStatus>(supabase ? 'loading' : 'disabled');
+  const [error, setError] = useState<string | null>(null);
+  const setStatus = (next: CloudStatus, message?: string) => {
+    setStatusRaw(next);
+    setError(next === 'error' ? message ?? 'Unknown error' : null);
+  };
   const loaded = useRef(false);
   const lastSynced = useRef<Record<string, string>>({});
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -38,6 +46,9 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
     if (!supabase) return;
     const client = supabase;
     let cancelled = false;
+    const slowTimer = setTimeout(() => {
+      if (!cancelled && !loaded.current) setStatus('error', 'The shared database did not answer in time.');
+    }, 15_000);
 
     const applyRemote = (key: string, value: unknown) => {
       const slice = slicesRef.current.find((s) => s.key === key);
@@ -60,10 +71,17 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
         if (cancelled) return;
         if (error) {
           console.error('[supabase] public load failed:', error.message);
-          setStatus('error');
+          setStatus('error', error.message);
           return;
         }
-        for (const row of (data ?? []) as { key: string; value: unknown }[]) applyRemote(row.key, row.value);
+        const rows = (data ?? []) as { key: string; value: unknown }[];
+        for (const row of rows) applyRemote(row.key, row.value);
+        // Visitors never upload this browser's own copy of data the cloud doesn't have yet.
+        if (!loaded.current) {
+          for (const slice of slicesRef.current) {
+            if (!rows.some((r) => r.key === slice.key)) lastSynced.current[slice.key] = JSON.stringify(slice.value);
+          }
+        }
         loaded.current = true;
         setStatus('synced');
       };
@@ -72,6 +90,7 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
       return () => {
         cancelled = true;
         clearInterval(timer);
+        clearTimeout(slowTimer);
       };
     }
 
@@ -80,7 +99,7 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
       if (cancelled) return;
       if (error) {
         console.error('[supabase] load failed:', error.message);
-        setStatus('error');
+        setStatus('error', error.message);
         return;
       }
       const remoteKeys = new Set<string>();
@@ -115,6 +134,7 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
 
     return () => {
       cancelled = true;
+      clearTimeout(slowTimer);
       client.removeChannel(channel);
     };
   }, []);
@@ -139,7 +159,7 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
         delete timers.current[slice.key];
         if (error) {
           console.error(`[supabase] save "${slice.key}" failed:`, error.message);
-          setStatus('error');
+          setStatus('error', `Saving "${slice.key}" failed: ${error.message}`);
         } else {
           lastSynced.current[slice.key] = json;
           setStatus('synced');
@@ -149,5 +169,5 @@ export function useCloudSync(slices: CloudSlice[], options: { guest?: boolean } 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, status === 'synced' && loaded.current]);
 
-  return status;
+  return { status, error };
 }
