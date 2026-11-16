@@ -135,7 +135,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       );
       return;
     }
-    if (staffLoginsEnabled && loginPassword.length < 6) {
+    const needsPassword = isAdminOrSuper(roleTier);
+    if (staffLoginsEnabled && needsPassword && loginPassword.length < 6) {
       setEmailError(
         language === 'my'
           ? 'Login Password သည် အနည်းဆုံး စာလုံး ၆ လုံး ရှိရပါမည်။'
@@ -168,8 +169,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setLoginPassword('');
     setActiveTab('offboard');
 
-    // Create the staff member's login straight away (Supabase Edge Function, admin only).
-    if (staffLoginsEnabled) {
+    // Members/Viewers sign in with just their email, so nothing else to do.
+    if (staffLoginsEnabled && !needsPassword) {
+      setLoginNotice({
+        ok: true,
+        text:
+          language === 'my'
+            ? `✅ ${staffName} ကို ထည့်ပြီးပါပြီ။ Password မလိုဘဲ ${cleanEmail} ဖြင့် တိုက်ရိုက် ဝင်ရောက်နိုင်ပါသည်။`
+            : `✅ ${staffName} added. They can sign in with just ${cleanEmail}, no password needed.`,
+      });
+    }
+
+    // Admins need a password: create their login straight away (Supabase Edge Function, admin only).
+    if (staffLoginsEnabled && needsPassword) {
       setLoginBusy(true);
       setLoginNotice({
         ok: true,
@@ -458,11 +470,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
             </div>
 
-            {staffLoginsEnabled && (
+            {staffLoginsEnabled && !isAdminOrSuper(roleTier) && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[11px] font-semibold text-emerald-800">
+                {language === 'my'
+                  ? '✅ ဤဝန်ထမ်းသည် Password မလိုဘဲ Email ဖြင့်သာ ဝင်ရောက်နိုင်ပါမည်။'
+                  : '✅ This staff member signs in with just their email, no password.'}
+              </div>
+            )}
+
+            {staffLoginsEnabled && isAdminOrSuper(roleTier) && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                 <label className="block text-xs font-bold text-blue-900 mb-1">
                   <KeyRound className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                  {language === 'my' ? 'Login Password (စတင်အသုံးပြုရန်)' : 'Starting login password'}{' '}
+                  {language === 'my' ? 'Admin Login Password (Admin များအတွက်သာ)' : 'Admin login password (admins only)'}{' '}
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -477,8 +497,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 />
                 <p className="mt-1 text-[11px] text-blue-800">
                   {language === 'my'
-                    ? 'သိမ်းလိုက်သည်နှင့် Login အလိုအလျောက် ဖန်တီးပါမည်။ ဤ Email နှင့် Password ကို ဝန်ထမ်းထံ ပေးပါ။ ဝန်ထမ်းက ဝင်ပြီးနောက် "Password" ခလုတ်ဖြင့် ပြောင်းနိုင်ပါသည်။'
-                    : 'The login is created as soon as you save. Give this email and password to the staff member; they can change it later with the "Password" button.'}
+                    ? 'Admin များသည် လုံခြုံရေးအတွက် Password ဖြင့် ဝင်ရပါမည်။ သိမ်းလိုက်သည်နှင့် Login ဖန်တီးပါမည်။ ဝင်ပြီးနောက် "Password" ခလုတ်ဖြင့် ပြောင်းနိုင်ပါသည်။'
+                    : 'Admins sign in with a password for security. The login is created when you save; they can change it later with the "Password" button.'}
                 </p>
               </div>
             )}
@@ -730,7 +750,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               )}
 
                               {/* Set / reset login password */}
-                              {staffLoginsEnabled && user.email && !isResigned && (
+                              {staffLoginsEnabled && user.email && !isResigned && isAdminOrSuper(user.roleTier) && (
                                 <button
                                   type="button"
                                   onClick={() => {

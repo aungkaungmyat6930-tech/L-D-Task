@@ -3,8 +3,9 @@ import type { Session } from '@supabase/supabase-js';
 import { LogIn, LogOut, Mail, KeyRound, Loader2 } from 'lucide-react';
 import { supabase, STATE_TABLE } from '../lib/supabase';
 import App from '../App';
+import { emailLogin } from '../lib/staffLogins';
 
-type Mode = 'signin' | 'signup' | 'forgot' | 'reset';
+type Mode = 'signin' | 'forgot' | 'reset';
 type Access = 'checking' | 'allowed' | 'not-registered' | 'resigned';
 
 const normalize = (email: string) => email.trim().toLowerCase();
@@ -79,7 +80,7 @@ function SupabaseAuthGate() {
   if (!session) {
     return (
       <AuthCard
-        title={mode === 'signup' ? 'Create your account' : mode === 'forgot' ? 'Reset password' : 'Staff sign in'}
+        title={mode === 'forgot' ? 'Reset password' : 'Staff sign in'}
       >
         <LoginForm mode={mode} setMode={setMode} />
       </AuthCard>
@@ -118,6 +119,8 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
   const client = supabase!;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Members/Viewers sign in with email only; the password step appears for admins.
+  const [needsPassword, setNeedsPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -129,35 +132,28 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
     setBusy(true);
     try {
       const cleanEmail = normalize(email);
-      if (mode === 'signin') {
-        const { error } = await client.auth.signInWithPassword({ email: cleanEmail, password });
-        if (error) setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message);
-      } else if (mode === 'signup') {
-        const { data: registered, error: checkError } = await client.rpc('is_registered_email', {
-          p_email: cleanEmail,
-        });
-        if (!checkError && registered === false) {
-          setError('This email is not an active staff email. Ask an admin to add it in the Staff In/Out portal first.');
-          return;
-        }
-        const { data, error } = await client.auth.signUp({
-          email: cleanEmail,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) setError(error.message);
-        else if (!data.session) setInfo('Account created. Check your email to confirm it, then sign in.');
-      } else if (mode === 'forgot') {
+      if (mode === 'forgot') {
         const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
           redirectTo: window.location.origin,
         });
         if (error) setError(error.message);
         else setInfo('If this email has an account, a reset link has been sent.');
+        return;
       }
+      if (!needsPassword) {
+        const res = await emailLogin(cleanEmail);
+        if (res.kind === 'needs-password' || res.kind === 'unavailable') setNeedsPassword(true);
+        else if (res.kind === 'error') setError(res.message);
+        return;
+      }
+      const { error } = await client.auth.signInWithPassword({ email: cleanEmail, password });
+      if (error) setError(error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message);
     } finally {
       setBusy(false);
     }
   };
+
+  const showPassword = mode === 'signin' && needsPassword;
 
   return (
     <form onSubmit={submit} className="space-y-3">
@@ -170,26 +166,29 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
             required
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setNeedsPassword(false);
+              setPassword('');
+            }}
             className={inputCls}
             placeholder="name@company.com"
           />
         </div>
       </label>
-      {mode !== 'forgot' && (
+      {showPassword && (
         <label className="block">
-          <span className={labelCls}>Password</span>
+          <span className={labelCls}>Admin password</span>
           <div className="relative">
             <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="password"
               required
-              minLength={6}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              autoFocus
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={inputCls}
-              placeholder={mode === 'signup' ? 'At least 6 characters' : ''}
             />
           </div>
         </label>
@@ -200,23 +199,20 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
 
       <button type="submit" disabled={busy} className={btnPrimary}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-        {mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
+        {mode === 'forgot' ? 'Send reset link' : 'Sign in'}
       </button>
 
       <div className="flex justify-between text-xs text-slate-500 pt-1">
-        {mode === 'signin' ? (
-          <>
-            <button type="button" onClick={() => setMode('signup')} className="hover:text-blue-600">
-              First time? Create account
-            </button>
-            <button type="button" onClick={() => setMode('forgot')} className="hover:text-blue-600">
-              Forgot password?
-            </button>
-          </>
-        ) : (
+        {mode === 'forgot' ? (
           <button type="button" onClick={() => setMode('signin')} className="hover:text-blue-600">
             ← Back to sign in
           </button>
+        ) : (
+          showPassword && (
+            <button type="button" onClick={() => setMode('forgot')} className="hover:text-blue-600 ml-auto">
+              Forgot password?
+            </button>
+          )
         )}
       </div>
     </form>

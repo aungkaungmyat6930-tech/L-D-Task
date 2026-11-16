@@ -1,4 +1,7 @@
-// Supabase Edge Function: lets portal admins create staff logins and reset their passwords.
+// Supabase Edge Function for staff logins.
+//  - email_login (no sign-in needed): Members/Viewers in the staff list sign in with just their email.
+//    Admins/Super Admins are told to use their password instead.
+//  - create / set_password (admins only): create a login with a password, or change it.
 // Deploy in Supabase Dashboard -> Edge Functions -> Deploy a new function, name: staff-admin.
 // The service-role key is provided by Supabase automatically; it never reaches the browser.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -23,15 +26,62 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-  // 1. Who is calling? Must be a signed-in, active Admin or Super Admin in the staff list.
-  const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
-  const { data: caller, error: callerError } = await admin.auth.getUser(jwt);
-  if (callerError || !caller?.user?.email) return json({ error: 'Please sign in again.' }, 401);
+  let body: { action?: string; email?: string; password?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: 'Invalid request.' }, 400);
+  }
 
   const loadStaff = async (): Promise<Staff[]> => {
     const { data } = await admin.from('app_state').select('value').eq('key', 'users').maybeSingle();
     return Array.isArray(data?.value) ? (data!.value as Staff[]) : [];
   };
+
+  const findAuthUser = async (email: string) => {
+    for (let page = 1; page <= 20; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+      if (error) throw error;
+      const found = data.users.find((u) => norm(u.email) === email);
+      if (found) return found;
+      if (data.users.length < 200) return null;
+    }
+    return null;
+  };
+
+  // Email-only sign-in for Members and Viewers.
+  if (body.action === 'email_login') {
+    const email = norm(body.email);
+    if (!email) return json({ error: 'Email is required.' }, 400);
+    const person = (await loadStaff()).find((u) => norm(u.email) === email);
+    if (!person) return json({ error: 'This email is not in the staff list. Ask an admin to add it.' }, 404);
+    if (person.status === 'Resigned') return json({ error: 'This staff member is marked Resigned.' }, 403);
+    if (['ADMIN', 'SUPER_ADMIN'].includes(person.roleTier ?? '')) return json({ needsPassword: true });
+
+    try {
+      if (!(await findAuthUser(email))) {
+        const { error } = await admin.auth.admin.createUser({
+          email,
+          password: crypto.randomUUID() + crypto.randomUUID(),
+          email_confirm: true,
+        });
+        if (error) return json({ error: error.message }, 400);
+      }
+      // Generates a one-time sign-in token without sending any email.
+      const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
+      if (error || !data?.properties?.hashed_token) {
+        return json({ error: error?.message ?? 'Could not sign in.' }, 400);
+      }
+      return json({ token_hash: data.properties.hashed_token });
+    } catch (e) {
+      return json({ error: (e as Error).message ?? 'Something went wrong.' }, 500);
+    }
+  }
+
+  // Everything below is for admins only.
+  const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const { data: caller, error: callerError } = await admin.auth.getUser(jwt);
+  if (callerError || !caller?.user?.email) return json({ error: 'Please sign in again.' }, 401);
 
   const staff = await loadStaff();
   const me = staff.find((u) => norm(u.email) === norm(caller.user.email));
@@ -39,12 +89,6 @@ Deno.serve(async (req) => {
     return json({ error: 'Only admins can manage staff logins.' }, 403);
   }
 
-  let body: { action?: string; email?: string; password?: string };
-  try {
-    body = await req.json();
-  } catch {
-    return json({ error: 'Invalid request.' }, 400);
-  }
   const email = norm(body.email);
   const password = body.password ?? '';
   if (!email) return json({ error: 'Email is required.' }, 400);
@@ -61,19 +105,8 @@ Deno.serve(async (req) => {
   if (!target) return json({ error: 'This email is not in the staff list yet. Save the staff member first.' }, 404);
   if (target.status === 'Resigned') return json({ error: 'This staff member is marked Resigned.' }, 400);
 
-  const findAuthUser = async () => {
-    for (let page = 1; page <= 20; page++) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-      if (error) throw error;
-      const found = data.users.find((u) => norm(u.email) === email);
-      if (found) return found;
-      if (data.users.length < 200) return null;
-    }
-    return null;
-  };
-
   try {
-    const existing = await findAuthUser();
+    const existing = await findAuthUser(email);
 
     if (body.action === 'create') {
       if (existing) {

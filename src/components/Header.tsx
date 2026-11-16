@@ -314,8 +314,8 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           )}
 
-          {/* Change own login password */}
-          {onSignOut && (
+          {/* Change own login password (admins sign in with a password; members use email only) */}
+          {onSignOut && isAdminOrSuper(currentUser.roleTier) && (
             <button
               onClick={() => {
                 setPwOpen(true);
