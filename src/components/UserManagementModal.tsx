@@ -249,15 +249,19 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       ? (language === 'my' ? ` ပို့မရသူ: ` : ` Failed: `) + res.failed.map((f) => `${f.email} (${f.error})`).join(', ')
       : '';
     setLoginNotice({
-      ok: res.failed.length === 0,
+      ok: res.failed.length === 0 && !(res.emailsSent === 0 && res.newOverdueTasks > 0),
       text:
         (res.emailsSent > 0
           ? language === 'my'
             ? `✅ Overdue ဖြစ်နေသော ဝန်ထမ်း ${res.emailsSent} ဦးထံ Mail ပို့ပြီးပါပြီ။`
             : `✅ Emailed ${res.emailsSent} staff member(s) about overdue tasks.`
-          : language === 'my'
-            ? '✅ Mail ပို့ရန် Overdue Task အသစ် မရှိပါ (ပို့ပြီးသား Task များကို ထပ်မပို့ပါ)။'
-            : '✅ No new overdue tasks to email (already-emailed tasks are not sent again).') + failedText,
+          : res.newOverdueTasks > 0
+            ? language === 'my'
+              ? `⚠️ Overdue Task ${res.newOverdueTasks} ခု တွေ့သော်လည်း ပို့ရမည့်သူ မရှိပါ (တာဝန်ခံ ဝန်ထမ်းတွင် Email မရှိခြင်း သို့မဟုတ် Resigned ဖြစ်နေခြင်း)။ ဝန်ထမ်း Profile တွင် Email ထည့်ပါ။`
+              : `⚠️ Found ${res.newOverdueTasks} overdue task(s) but nobody to email (the assigned staff have no email or are Resigned). Add their email in their profile.`
+            : language === 'my'
+              ? '✅ Mail ပို့ရန် Overdue Task အသစ် မရှိပါ။ ပို့ပြီးသား Task များကို ထပ်မပို့ပါ။ တစ်ဦးချင်း ထပ်ပို့လိုပါက ၎င်း၏ ကတ်ပေါ်ရှိ "Overdue Mail ပို့ရန်" ကို နှိပ်ပါ။'
+              : '✅ No new overdue tasks to email; already-emailed tasks are not sent again. To resend to someone, use "Email overdue" on their card.') + failedText,
     });
   };
 
