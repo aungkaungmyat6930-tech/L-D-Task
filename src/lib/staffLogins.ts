@@ -77,10 +77,12 @@ export type OverdueEmailResult =
   | { ok: true; emailsSent: number; newOverdueTasks: number; failed: { email: string; error: string }[] }
   | { ok: false; error: string };
 
-/** Admins: email staff about tasks that became overdue (same as the daily schedule). */
-export async function sendOverdueEmails(): Promise<OverdueEmailResult> {
+/** Admins: email staff about overdue tasks. With userId, emails that one person all of their overdue tasks now. */
+export async function sendOverdueEmails(userId?: string): Promise<OverdueEmailResult> {
   if (!supabase) return { ok: false, error: 'Supabase is not configured.' };
-  const { data, error } = await supabase.functions.invoke('overdue-reminders', { body: {} });
+  const { data, error } = await supabase.functions.invoke('overdue-reminders', {
+    body: userId ? { userId } : {},
+  });
   if (error) {
     let message = error.message;
     try {

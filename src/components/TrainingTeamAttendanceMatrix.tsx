@@ -119,7 +119,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
       case 'Office':
         return 'bg-emerald-50 text-emerald-800 border-emerald-200 font-bold';
       case 'Leave':
-        return 'bg-teal-100 text-teal-900 border-teal-300 font-bold';
+        return 'bg-red-600 text-white border-red-700 font-bold';
       case 'Unmarked':
         return 'bg-white text-slate-400 border-slate-200';
     }
@@ -159,7 +159,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
           <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
             {language === 'my' ? 'ရုံးတက် (Office)' : 'Office'}
           </span>
-          <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-200 border border-teal-400/30">
+          <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-200 border border-red-400/30">
             {language === 'my' ? 'ခွင့် (Leave — Super Admin Approved)' : 'Leave'}
           </span>
         </div>
@@ -320,7 +320,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                         {approvedLeavesInWeek.map((lv) => (
                           <span
                             key={lv.id}
-                            className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200 tabular-nums"
+                            className="inline-block text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-800 border border-red-200 tabular-nums"
                           >
                             {getShortLeaveTypeLabel(lv.type, language)} · {lv.duration}d ({lv.start.slice(5)}~{lv.end.slice(5)})
                           </span>
@@ -396,7 +396,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                         )}
 
                         {row.leave && row.status === 'Leave' && (
-                          <div className="mt-1 px-1 py-0.5 rounded text-[9px] font-bold leading-tight tabular-nums bg-teal-50 text-teal-900 border border-teal-200">
+                          <div className="mt-1 px-1 py-0.5 rounded text-[9px] font-bold leading-tight tabular-nums bg-red-50 text-red-900 border border-red-200">
                             <div className="truncate">
                               {getShortLeaveTypeLabel(row.leave.type, language)} · {row.leave.duration}d
                             </div>
@@ -419,7 +419,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                     <div className="text-[11px] font-extrabold text-emerald-700">
                       {wkOffice}d {language === 'my' ? 'တက်' : 'in'}
                     </div>
-                    <div className="text-[10px] font-bold text-teal-700">
+                    <div className="text-[10px] font-bold text-red-700">
                       {wkLeave}d {language === 'my' ? 'ခွင့်' : 'leave'}
                     </div>
                   </td>

@@ -28,6 +28,7 @@ import {
 import { isTaskOverdue, isTaskNearDeadline } from './utils/taskHelpers';
 import { formatTotalTrainerHours } from './utils/trainingHelpers';
 import { useCloudSync } from './lib/cloudSync';
+import { sendOverdueEmails } from './lib/staffLogins';
 
 // Components
 import { Header } from './components/Header';
@@ -1474,6 +1475,29 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
   };
 
   // Update Member Status (Onboard / Offboard / Resign - Admin / Super Admin Only)
+  // Admins: email one person about their overdue tasks now (button on their card).
+  const handleSendOverdueMail = async (user: UserProfile) => {
+    if (!isAdminOrSuper(currentUser.roleTier)) return;
+    const res = await sendOverdueEmails(user.id);
+    if (!res.ok) {
+      showToast((language === 'my' ? '⚠️ Mail မပို့နိုင်ပါ: ' : '⚠️ Could not send email: ') + res.error);
+      return;
+    }
+    if (res.failed.length) {
+      showToast((language === 'my' ? '⚠️ Mail မပို့နိုင်ပါ: ' : '⚠️ Could not send email: ') + res.failed[0].error);
+      return;
+    }
+    showToast(
+      res.emailsSent > 0
+        ? language === 'my'
+          ? `📧 ${user.name} (${user.email}) ထံ Overdue Task ${res.newOverdueTasks} ခု အကြောင်း Mail ပို့ပြီးပါပြီ။`
+          : `📧 Emailed ${user.name} (${user.email}) about ${res.newOverdueTasks} overdue task(s).`
+        : language === 'my'
+          ? `${user.name} တွင် Overdue Task မရှိတော့ပါ။`
+          : `${user.name} has no overdue tasks now.`
+    );
+  };
+
   // Change a staff member's role from the Staff In/Out portal (admins only).
   const handleUpdateUserRole = (userId: string, newRole: RoleTier) => {
     if (!isAdminOrSuper(currentUser.roleTier)) return;
@@ -1751,6 +1775,7 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
             onOpenAddLeave={handleOpenAddLeave}
             onOpenAddTraining={handleOpenAddTraining}
             onOpenAddUser={() => setIsAddUserModalOpen(true)}
+            onSendOverdueMail={guest ? undefined : handleSendOverdueMail}
             language={language}
           />
         )}

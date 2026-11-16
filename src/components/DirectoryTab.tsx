@@ -19,6 +19,7 @@ import {
   UserPlus, 
   Plus,
   BellRing,
+  Mail,
   Bell
 } from 'lucide-react';
 import {
@@ -45,6 +46,8 @@ interface DirectoryTabProps {
   onOpenAddLeave: (targetMember?: UserProfile) => void;
   onOpenAddTraining: (targetMember?: UserProfile) => void;
   onOpenAddUser: () => void;
+  /** Admins: email this person about their overdue tasks now. */
+  onSendOverdueMail?: (user: UserProfile) => Promise<void>;
   language: Language;
 }
 
@@ -61,6 +64,7 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   onOpenAddLeave,
   onOpenAddTraining,
   onOpenAddUser,
+  onSendOverdueMail,
   language,
 }) => {
   const t = TRANSLATIONS[language];
@@ -68,6 +72,7 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
   const [reportMonth, setReportMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
 
   const isAdmin = isAdminOrSuper(currentUser.roleTier);
+  const [mailingUserId, setMailingUserId] = React.useState<string | null>(null);
   const todayStr = new Date().toISOString().split('T')[0];
 
   const handleExportAllExcel = () => {
@@ -376,6 +381,48 @@ export const DirectoryTab: React.FC<DirectoryTabProps> = ({
                       <span className="text-[9px] font-bold text-slate-500">Hours</span>
                     </div>
                   </div>
+
+                  {/* Admins: email this person about their overdue tasks */}
+                  {isAdmin && onSendOverdueMail && uOverdueCount > 0 && !isResigned && (
+                    <button
+                      type="button"
+                      disabled={mailingUserId === user.id || !user.email}
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setMailingUserId(user.id);
+                        try {
+                          await onSendOverdueMail(user);
+                        } finally {
+                          setMailingUserId(null);
+                        }
+                      }}
+                      title={
+                        user.email
+                          ? language === 'my'
+                            ? `${user.name} (${user.email}) ထံ Overdue Task ${uOverdueCount} ခု အကြောင်း Mail ယခု ပို့ရန်`
+                            : `Email ${user.name} (${user.email}) about ${uOverdueCount} overdue task(s) now`
+                          : language === 'my'
+                            ? `${user.name} တွင် Email မရှိပါ။ Profile တွင် Email ထည့်ပါ။`
+                            : `${user.name} has no email. Add one in their profile.`
+                      }
+                      className="w-full mt-3 py-1.5 px-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-full text-[11px] flex items-center justify-center gap-1 shadow-xs border border-red-400/60 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <Mail className="w-3 h-3 shrink-0" />
+                      <span>
+                        {mailingUserId === user.id
+                          ? language === 'my'
+                            ? 'ပို့နေသည်...'
+                            : 'Sending...'
+                          : !user.email
+                            ? language === 'my'
+                              ? 'Email မရှိပါ'
+                              : 'No email'
+                            : language === 'my'
+                              ? `Overdue Mail ပို့ရန် (${uOverdueCount})`
+                              : `Email overdue (${uOverdueCount})`}
+                      </span>
+                    </button>
+                  )}
 
                   {/* Bottom Frosted Pill Actions */}
                   <div className="w-full mt-3.5 pt-3 border-t border-slate-300/40 flex items-center justify-between gap-1.5">
