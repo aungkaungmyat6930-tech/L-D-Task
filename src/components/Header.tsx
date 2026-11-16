@@ -19,7 +19,8 @@ import {
   ImagePlus,
   Pencil,
   Camera,
-  LogOut
+  LogOut,
+  LogIn
 } from 'lucide-react';
 import {
   Icon3DTeamDirectory,
@@ -40,6 +41,7 @@ interface HeaderProps {
   canResetData?: boolean;
   authEmail?: string;
   onSignOut?: () => void;
+  onSignIn?: () => void;
   onOpenEditProfile: () => void;
   onOpenOrgChart: () => void;
   onResetData: () => void;
@@ -66,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   canResetData = true,
   authEmail,
   onSignOut,
+  onSignIn,
   onOpenEditProfile,
   onOpenOrgChart,
   onResetData,
@@ -327,6 +330,17 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <KeyRound className="w-3.5 h-3.5 text-amber-300" />
               <span className="hidden sm:inline">Password</span>
+            </button>
+          )}
+
+          {/* Sign in (visitors) */}
+          {onSignIn && (
+            <button
+              onClick={onSignIn}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>{language === 'my' ? 'ဝင်ရန် (Sign in)' : 'Sign in'}</span>
             </button>
           )}
 

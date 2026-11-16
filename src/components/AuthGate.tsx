@@ -22,6 +22,8 @@ function SupabaseAuthGate() {
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>('signin');
   const [access, setAccess] = useState<Access>('checking');
+  // Visitors see the read-only portal until they choose to sign in.
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     client.auth.getSession().then(({ data }) => {
@@ -69,6 +71,7 @@ function SupabaseAuthGate() {
     } catch {}
     await client.auth.signOut();
     setMode('signin');
+    setShowLogin(false);
   };
 
   if (!ready) return <Splash />;
@@ -78,11 +81,22 @@ function SupabaseAuthGate() {
   }
 
   if (!session) {
+    if (!showLogin) return <App guest onSignIn={() => setShowLogin(true)} />;
     return (
       <AuthCard
         title={mode === 'forgot' ? 'Reset password' : 'Staff sign in'}
       >
         <LoginForm mode={mode} setMode={setMode} />
+        <button
+          type="button"
+          onClick={() => {
+            setShowLogin(false);
+            setMode('signin');
+          }}
+          className="mt-4 w-full text-xs text-slate-500 hover:text-blue-600"
+        >
+          ← Back to portal (view only)
+        </button>
       </AuthCard>
     );
   }
