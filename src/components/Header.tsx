@@ -248,69 +248,6 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Workspace Switcher & Tools (Clean Top-Right Cluster) */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          {/* Language Toggle */}
-          <button
-            onClick={onToggleLanguage}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 rounded-lg border border-amber-600/40 transition-colors whitespace-nowrap"
-            title="Switch Language"
-          >
-            <Globe className="w-4 h-4" />
-            <span>{language === 'my' ? 'ENG' : 'မြန်မာ'}</span>
-          </button>
-
-          {/* Active User Switcher */}
-          <div className="flex items-center gap-1.5 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700 shadow-inner">
-            <span className="text-sm text-slate-300 font-medium hidden xl:inline">
-              {t.activeUserContext}
-            </span>
-            {!canSwitchUser ? (
-              <span className="text-white text-sm font-semibold px-2 py-1">{currentUser.name}</span>
-            ) : (
-            <select
-              value={currentUser.id}
-              onChange={(e) => onSwitchUser(e.target.value)}
-              className="bg-slate-900 text-white text-sm font-semibold rounded-lg px-2.5 py-1.5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
-            >
-              <optgroup label="👑 Super Admins (Full Control + Leave Approval)">
-                {allUsers
-                  .filter((u) => u.roleTier === 'SUPER_ADMIN')
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      👑 {u.name} ({u.roleLabel})
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label="🔐 Admins (Management, Except Leave Approval)">
-                {allUsers
-                  .filter((u) => u.roleTier === 'ADMIN')
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      🔐 {u.name} ({u.roleLabel})
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label="👤 Team Members (Self-Service: Name, Tasks, Leaves, Hours)">
-                {allUsers
-                  .filter((u) => u.roleTier === 'MEMBER')
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.roleLabel})
-                    </option>
-                  ))}
-              </optgroup>
-              <optgroup label="👁 Viewers (Read-Only)">
-                {allUsers
-                  .filter((u) => u.roleTier === 'VIEWER')
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.roleLabel})
-                    </option>
-                  ))}
-              </optgroup>
-            </select>
-            )}
-          </div>
-
           {/* Reset Data Button */}
           {canResetData && (
           <button
@@ -320,22 +257,6 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
-          )}
-
-          {/* Change own login password */}
-          {onSignOut && (
-            <button
-              onClick={() => {
-                setPwOpen(true);
-                setPwMsg(null);
-                setPwValue('');
-              }}
-              title={language === 'my' ? 'ကိုယ်ပိုင် Login Password ပြောင်းရန်' : 'Change my login password'}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-slate-200 bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap"
-            >
-              <KeyRound className="w-4 h-4 text-amber-300" />
-              <span className="hidden sm:inline">Password</span>
-            </button>
           )}
 
           {/* Sign in (visitors) */}
@@ -444,36 +365,70 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 </button>
                 )}
-                <input
-                  ref={navImageInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleDirectNavImageUpload}
-                  className="hidden"
-                />
-                <button
-                  type="button"
-                  onClick={() => navImageInputRef.current?.click()}
-                  title={
-                    language === 'my'
-                      ? 'Navi Bar နောက်ခံပုံ တင်ရန် (Admin / Super Admin)'
-                      : 'Upload a navigation bar background image'
-                  }
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-amber-200 bg-white/10 hover:bg-white/20 border border-amber-400/40 rounded-lg transition whitespace-nowrap"
-                >
-                  <ImagePlus className="w-4 h-4" />
-                  <span>{language === 'my' ? 'Nav ပုံတင်ရန်' : 'Nav Image'}</span>
-                </button>
-                <button
-                  onClick={onLockAdmin}
-                  title={language === 'my' ? 'Admin Lock ချရန်' : 'Lock Admin Session'}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition whitespace-nowrap"
-                >
-                  <Lock className="w-4 h-4 text-amber-400" />
-                  <span>Lock</span>
-                </button>
               </>
             )}
+            {/* Language Toggle */}
+            <button
+              onClick={onToggleLanguage}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 rounded-lg border border-amber-600/40 transition-colors whitespace-nowrap"
+              title="Switch Language"
+            >
+              <Globe className="w-4 h-4" />
+              <span>{language === 'my' ? 'ENG' : 'မြန်မာ'}</span>
+            </button>
+
+            {/* Active User Switcher */}
+            <div className="flex items-center gap-1.5 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700 shadow-inner">
+              <span className="text-sm text-slate-300 font-medium hidden xl:inline">
+                {t.activeUserContext}
+              </span>
+              {!canSwitchUser ? (
+                <span className="text-white text-sm font-semibold px-2 py-1">{currentUser.name}</span>
+              ) : (
+              <select
+                value={currentUser.id}
+                onChange={(e) => onSwitchUser(e.target.value)}
+                className="bg-slate-900 text-white text-sm font-semibold rounded-lg px-2.5 py-1.5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+              >
+                <optgroup label="👑 Super Admins (Full Control + Leave Approval)">
+                  {allUsers
+                    .filter((u) => u.roleTier === 'SUPER_ADMIN')
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        👑 {u.name} ({u.roleLabel})
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔐 Admins (Management, Except Leave Approval)">
+                  {allUsers
+                    .filter((u) => u.roleTier === 'ADMIN')
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        🔐 {u.name} ({u.roleLabel})
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="👤 Team Members (Self-Service: Name, Tasks, Leaves, Hours)">
+                  {allUsers
+                    .filter((u) => u.roleTier === 'MEMBER')
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.roleLabel})
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="👁 Viewers (Read-Only)">
+                  {allUsers
+                    .filter((u) => u.roleTier === 'VIEWER')
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.roleLabel})
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+              )}
+            </div>
           </div>
         </div>
       </div>
