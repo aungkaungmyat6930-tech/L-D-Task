@@ -561,6 +561,16 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     const found = users.find((u) => u.id === userId);
     if (!found) return;
 
+    // Only a signed-in Super Admin may act as a Super Admin (leave approval is Super Admin only).
+    if (authEmail && found.roleTier === 'SUPER_ADMIN' && authProfile?.roleTier !== 'SUPER_ADMIN') {
+      showToast(
+        language === 'my'
+          ? 'Super Admin အဖြစ် ပြောင်း၍ မရပါ။ ခွင့်ခွင့်ပြုခြင်းကို Super Admin ကိုယ်တိုင်သာ ပြုလုပ်နိုင်ပါသည်။'
+          : "You can't act as a Super Admin. Only Super Admins can approve leave."
+      );
+      return;
+    }
+
     // Visitors: admin accounts need a real sign-in with email and password.
     if (guest && isAdminOrSuper(found.roleTier)) {
       showToast(
@@ -672,6 +682,15 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     status: AttendanceOverrideStatus | null,
     note?: string
   ) => {
+    // Marking a day as Leave counts as approved leave: Super Admin only.
+    if (status === 'Leave' && !canApproveLeave(currentUser.roleTier)) {
+      showToast(
+        language === 'my'
+          ? 'ခွင့် (Leave) အဖြစ် သတ်မှတ်ခြင်းကို Super Admin သာ ပြုလုပ်နိုင်ပါသည်။ ခွင့်တောင်းခံလွှာ တင်ပါ။'
+          : 'Only a Super Admin can mark a day as Leave. Please submit a leave request.'
+      );
+      return;
+    }
     const id = `${memberId}_${date}`;
     setAttendanceOverrides((prev) => {
       const filtered = prev.filter((item) => !(item.memberId === memberId && item.date === date));

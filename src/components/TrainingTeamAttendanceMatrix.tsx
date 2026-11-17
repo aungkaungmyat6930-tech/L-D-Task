@@ -367,6 +367,7 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                             onChange={(e) => {
                               const val = e.target.value;
                               if (!isAdmin && val !== 'Office') return;
+                if (val === 'Leave' && currentUser.roleTier !== 'SUPER_ADMIN') return;
                               onSetAttendanceOverride(
                                 member.id,
                                 row.date,
@@ -385,7 +386,9 @@ export const TrainingTeamAttendanceMatrix: React.FC<TrainingTeamAttendanceMatrix
                               </option>
                             )}
                             <option value="Office">Office</option>
-                            {isAdmin && <option value="Leave">Leave</option>}
+                            {isAdmin && (currentUser.roleTier === 'SUPER_ADMIN' || selectValue === 'Leave') && (
+                <option value="Leave" disabled={currentUser.roleTier !== 'SUPER_ADMIN'}>Leave</option>
+              )}
                           </select>
                         ) : (
                           <span
