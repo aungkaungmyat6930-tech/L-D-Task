@@ -40,6 +40,7 @@ import { LeaveTab } from './components/LeaveTab';
 import { TrainingTab } from './components/TrainingTab';
 import { WeeklyBoardTab } from './components/WeeklyBoardTab';
 import { ProjectsTab } from './components/ProjectsTab';
+import { AuditTab } from './components/AuditTab';
 
 // Modals
 import { ProfileEditModal } from './components/ProfileEditModal';
@@ -500,6 +501,10 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
       setCurrentUser(authProfile);
     }
   }, [authProfile, authIsAdmin]);
+
+  useEffect(() => {
+    if (currentTab === 'audit' && !isAdminOrSuper(currentUser?.roleTier)) setCurrentTab('directory');
+  }, [currentTab, currentUser]);
 
   // Keep the active user in step with the user list (e.g. after edits from another browser).
   // Uses the latest value so it never undoes a switch made in the same update (e.g. on sign-in).
@@ -1895,6 +1900,10 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
             }}
             language={language}
           />
+        )}
+
+        {currentTab === 'audit' && isAdminOrSuper(currentUser.roleTier) && (
+          <AuditTab users={users} language={language} />
         )}
 
         {currentTab === 'projects' && (

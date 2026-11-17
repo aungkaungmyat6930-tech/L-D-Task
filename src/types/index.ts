@@ -168,7 +168,7 @@ export interface AppearanceSettings {
   loginImageDataUrl?: string;
 }
 
-export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects';
+export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects' | 'audit';
 
 /** "Forgot password" request from the login page, waiting for an admin to give a temporary password. */
 export interface PasswordRequest {
