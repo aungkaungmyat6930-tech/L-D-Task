@@ -18,7 +18,6 @@ import {
   Bell,
   History,
   ImagePlus,
-  Pencil,
   Camera,
   LogOut,
   LogIn
@@ -161,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      className="text-white border-b border-white/10 sticky top-0 z-40 shadow-md"
+      className="text-white border-b border-white/10 relative lg:sticky lg:top-0 z-40 shadow-md"
       style={
         navbarImageDataUrl
           ? {
@@ -174,9 +173,9 @@ export const Header: React.FC<HeaderProps> = ({
       }
     >
       {/* Top Brand & Workspace Row */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         {/* Brand Zone */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-4 sm:gap-5">
           <div
             onClick={isAnyAdmin ? onOpenAppearanceSettings : undefined}
             title={
@@ -224,43 +223,43 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-lg sm:text-xl font-extrabold tracking-tight text-white whitespace-nowrap">
+              <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
                 {t.brandName}
               </span>
-              <span className="text-xs font-semibold text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2.5 py-0.5 rounded-md whitespace-nowrap">
+              <span className="text-xs sm:text-sm font-semibold text-amber-300 bg-amber-500/15 border border-amber-400/30 px-3 py-1 rounded-lg whitespace-nowrap">
                 {t.subBrand}
               </span>
             </div>
-            <p className="text-xs text-slate-300/90 hidden sm:block mt-0.5">
+            <p className="text-sm text-slate-300/90 hidden sm:block mt-1">
               {t.portalTagline}
             </p>
           </div>
         </div>
 
         {/* Workspace Switcher & Tools (Clean Top-Right Cluster) */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {/* Language Toggle */}
           <button
             onClick={onToggleLanguage}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 rounded-lg border border-amber-600/40 transition-colors whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-amber-300 bg-amber-950/40 hover:bg-amber-900/50 rounded-lg border border-amber-600/40 transition-colors whitespace-nowrap"
             title="Switch Language"
           >
-            <Globe className="w-3.5 h-3.5" />
+            <Globe className="w-4 h-4" />
             <span>{language === 'my' ? 'ENG' : 'မြန်မာ'}</span>
           </button>
 
           {/* Active User Switcher */}
-          <div className="flex items-center gap-1.5 bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700 shadow-inner">
-            <span className="text-xs text-slate-300 font-medium hidden xl:inline">
+          <div className="flex items-center gap-1.5 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700 shadow-inner">
+            <span className="text-sm text-slate-300 font-medium hidden xl:inline">
               {t.activeUserContext}
             </span>
             {!canSwitchUser ? (
-              <span className="text-white text-xs font-semibold px-2 py-1">{currentUser.name}</span>
+              <span className="text-white text-sm font-semibold px-2 py-1">{currentUser.name}</span>
             ) : (
             <select
               value={currentUser.id}
               onChange={(e) => onSwitchUser(e.target.value)}
-              className="bg-slate-900 text-white text-xs font-semibold rounded px-2 py-1 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
+              className="bg-slate-900 text-white text-sm font-semibold rounded-lg px-2.5 py-1.5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer"
             >
               <optgroup label="👑 Super Admins (Full Control + Leave Approval)">
                 {allUsers
@@ -307,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onResetData}
             title={t.resetData}
-            className="p-1.5 text-slate-300 hover:text-white bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
+            className="p-2 text-slate-300 hover:text-white bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -322,9 +321,9 @@ export const Header: React.FC<HeaderProps> = ({
                 setPwValue('');
               }}
               title={language === 'my' ? 'ကိုယ်ပိုင် Login Password ပြောင်းရန်' : 'Change my login password'}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-slate-200 bg-slate-800/70 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors whitespace-nowrap"
             >
-              <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+              <KeyRound className="w-4 h-4 text-amber-300" />
               <span className="hidden sm:inline">Password</span>
             </button>
           )}
@@ -333,9 +332,9 @@ export const Header: React.FC<HeaderProps> = ({
           {onSignIn && (
             <button
               onClick={onSignIn}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap shadow-sm"
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-slate-900 bg-amber-400 hover:bg-amber-300 rounded-lg transition-colors whitespace-nowrap shadow-sm"
             >
-              <LogIn className="w-3.5 h-3.5" />
+              <LogIn className="w-4 h-4" />
               <span>{language === 'my' ? 'ဝင်ရန် (Sign in)' : 'Sign in'}</span>
             </button>
           )}
@@ -345,9 +344,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onSignOut}
               title={authEmail ? `Sign out (${authEmail})` : 'Sign out'}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-red-100 bg-red-900/50 hover:bg-red-800/70 border border-red-500/40 rounded-lg transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold text-red-100 bg-red-900/50 hover:bg-red-800/70 border border-red-500/40 rounded-lg transition-colors whitespace-nowrap"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
               <span>{language === 'my' ? 'ထွက်ရန်' : 'Sign out'}</span>
             </button>
           )}
@@ -356,41 +355,41 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Evenly Spread User & Admin Utility Strip */}
       <div className="border-t border-white/10 bg-black/25">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center justify-between gap-3">
           {/* Active User Identity */}
           <div className="flex items-center gap-2.5 min-w-0">
             <img
               src={currentUser.avatar}
               alt={currentUser.name}
               referrerPolicy="no-referrer"
-              className="w-8 h-8 rounded-full border-2 border-amber-400 object-cover shadow-sm shrink-0"
+              className="w-11 h-11 rounded-full border-2 border-amber-400 object-cover shadow-sm shrink-0"
             />
             <div className="min-w-0 leading-tight">
-              <div className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
+              <div className="text-base font-bold text-white flex items-center gap-2 flex-wrap">
                 <span className="truncate">{currentUser.name}</span>
                 {isSuper ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-extrabold">
-                    <Icon3DCrown className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold">
+                    <Icon3DCrown className="w-4 h-4" />
                     <span>Super Admin</span>
                   </span>
                 ) : isAnyAdmin ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 text-[10px] font-extrabold">
-                    <Icon3DShield className="w-3.5 h-3.5" />
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/20 border border-purple-400/40 text-purple-200 text-[11px] font-extrabold">
+                    <Icon3DShield className="w-4 h-4" />
                     <span>Admin</span>
                   </span>
                 ) : currentUser.roleTier === 'VIEWER' ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-[10px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-[11px] font-bold">
                     <Eye className="w-3 h-3" />
                     <span>Viewer</span>
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[10px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-400/40 text-blue-200 text-[11px] font-bold">
                     <User className="w-3 h-3" />
                     <span>Member</span>
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-slate-300 font-medium truncate">
+              <div className="text-xs sm:text-sm text-slate-300 font-medium truncate">
                 {currentUser.roleLabel} · {currentUser.dept}
               </div>
             </div>
@@ -401,10 +400,10 @@ export const Header: React.FC<HeaderProps> = ({
             {currentUser.roleTier !== 'VIEWER' && (
               <button
                 onClick={onOpenEditProfile}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-all whitespace-nowrap"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-all whitespace-nowrap"
                 title={t.editProfile}
               >
-                <UserPen className="w-3.5 h-3.5" />
+                <UserPen className="w-4 h-4" />
                 <span>{t.editProfile}</span>
               </button>
             )}
@@ -418,29 +417,49 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'Logo, Theme Color နှင့် Font Style ပြင်ဆင်ရန်'
                       : 'Customize Logo, Theme Color & Font Style'
                   }
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-cyan-100 bg-cyan-800/75 hover:bg-cyan-700 border border-cyan-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-cyan-100 bg-cyan-800/75 hover:bg-cyan-700 border border-cyan-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
                 >
-                  <Palette className="w-3.5 h-3.5 text-cyan-300" />
+                  <Palette className="w-4 h-4 text-cyan-300" />
                   <span>{language === 'my' ? 'Logo / Theme / Font' : 'Theme & Logo'}</span>
                 </button>
                 {onOpenChangeAdminPassword && (
                 <button
                   onClick={onOpenChangeAdminPassword}
                   title={language === 'my' ? 'Admin Password ပြောင်းရန်' : 'Change Admin Password'}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-100 bg-purple-700/80 hover:bg-purple-600 border border-purple-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-purple-100 bg-purple-700/80 hover:bg-purple-600 border border-purple-400/50 rounded-lg shadow-xs transition whitespace-nowrap"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-300" />
+                  <KeyRound className="w-4 h-4 text-amber-300" />
                   <span>
                     {language === 'my' ? 'Password ပြောင်း' : 'Change Password'}
                   </span>
                 </button>
                 )}
+                <input
+                  ref={navImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleDirectNavImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => navImageInputRef.current?.click()}
+                  title={
+                    language === 'my'
+                      ? 'Navi Bar နောက်ခံပုံ တင်ရန် (Admin / Super Admin)'
+                      : 'Upload a navigation bar background image'
+                  }
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold text-amber-200 bg-white/10 hover:bg-white/20 border border-amber-400/40 rounded-lg transition whitespace-nowrap"
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  <span>{language === 'my' ? 'Nav ပုံတင်ရန်' : 'Nav Image'}</span>
+                </button>
                 <button
                   onClick={onLockAdmin}
                   title={language === 'my' ? 'Admin Lock ချရန်' : 'Lock Admin Session'}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition whitespace-nowrap"
                 >
-                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <Lock className="w-4 h-4 text-amber-400" />
                   <span>Lock</span>
                 </button>
               </>
@@ -456,7 +475,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={onOpenPasswordRequests}
           className="w-full bg-gradient-to-r from-red-700 to-red-600 hover:from-red-800 hover:to-red-700 text-white px-4 py-1.5 text-xs font-bold transition"
         >
-          <span className="max-w-7xl mx-auto flex items-center justify-center gap-2">
+          <span className="max-w-[1600px] mx-auto flex items-center justify-center gap-2">
             <Bell className="w-4 h-4 text-amber-200 animate-pulse" />
             <span>
               {language === 'my'
@@ -467,80 +486,9 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
       )}
 
-      {/* Admin Alert Notice Bar if overdue, near deadline, or pending leaves exist */}
-      {(pendingLeavesCount > 0 || overdueTasksCount > 0 || dueSoonTasksCount > 0) && (
-        <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-4 py-1.5 text-xs">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <AlertTriangle className="w-4 h-4 text-amber-200 shrink-0" />
-              <span className="flex flex-wrap items-center gap-2">
-                <strong>
-                  {isSuper
-                    ? 'Super Admin Notice:'
-                    : isAnyAdmin
-                    ? 'Admin Action Notice:'
-                    : 'Notice:'}
-                </strong>
-                {pendingLeavesCount > 0 && (
-                  <span
-                    className="font-semibold underline cursor-pointer"
-                    onClick={() =>
-                      onJumpToFiltered ? onJumpToFiltered('leave', 'pending') : onSelectTab('leave')
-                    }
-                  >
-                    {pendingLeavesCount} {t.metricPendingLeaves.toLowerCase()}
-                  </span>
-                )}
-                {overdueTasksCount > 0 && (
-                  <span
-                    className="font-semibold underline cursor-pointer"
-                    onClick={() =>
-                      onJumpToFiltered ? onJumpToFiltered('tasks', 'overdue') : onSelectTab('tasks')
-                    }
-                  >
-                    {overdueTasksCount} {t.metricOverdue.toLowerCase()}
-                  </span>
-                )}
-                {dueSoonTasksCount > 0 && (
-                  <span
-                    className="inline-flex items-center gap-1 font-bold bg-amber-950/35 hover:bg-amber-950/55 px-2 py-0.5 rounded-full cursor-pointer transition"
-                    onClick={() =>
-                      onJumpToFiltered ? onJumpToFiltered('tasks', 'due-soon') : onSelectTab('tasks')
-                    }
-                  >
-                    <Bell className="w-3 h-3 text-yellow-300" />
-                    <span>
-                      {dueSoonTasksCount} {language === 'my' ? 'Deadline နီးနေသည်' : 'due soon'}
-                    </span>
-                  </span>
-                )}
-              </span>
-            </div>
-            <button
-              onClick={() =>
-                pendingLeavesCount > 0
-                  ? onJumpToFiltered
-                    ? onJumpToFiltered('leave', 'pending')
-                    : onSelectTab('leave')
-                  : overdueTasksCount > 0
-                  ? onJumpToFiltered
-                    ? onJumpToFiltered('tasks', 'overdue')
-                    : onSelectTab('tasks')
-                  : onJumpToFiltered
-                  ? onJumpToFiltered('tasks', 'due-soon')
-                  : onSelectTab('tasks')
-              }
-              className="text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded transition"
-            >
-              {language === 'my' ? 'စစ်ဆေးရန် →' : 'Review →'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Navigation Tabs Bar */}
       <nav
-        className="border-t border-white/10 px-4 sm:px-6 lg:px-8 overflow-x-auto"
+        className="border-t border-white/10 px-4 sm:px-6 lg:px-10"
         style={
           navbarImageDataUrl
             ? { background: 'rgba(15, 23, 42, 0.35)' }
@@ -549,31 +497,31 @@ export const Header: React.FC<HeaderProps> = ({
               }
         }
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 py-1.5 text-xs min-w-max lg:min-w-0">
-          <div className="flex-1 flex items-center justify-between gap-1.5 sm:gap-2">
+        <div className="max-w-[1600px] mx-auto py-2.5 text-xs sm:text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-1.5 sm:gap-2">
             <button
               onClick={() => onSelectTab('directory')}
               style={currentTab === 'directory' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'directory'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DTeamDirectory className="w-4 h-4 shrink-0" />
+              <Icon3DTeamDirectory className="w-5 h-5 shrink-0" />
               <span>{t.tabDirectory}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('tasks')}
               style={currentTab === 'tasks' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'tasks'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DTasks className="w-4 h-4 shrink-0" />
+              <Icon3DTasks className="w-5 h-5 shrink-0" />
               <span>{t.tabTasks}</span>
               {overdueTasksCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-red-500 text-white font-bold rounded-full">
@@ -593,13 +541,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onSelectTab('leave')}
               style={currentTab === 'leave' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'leave'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DLeaveCalendar className="w-4 h-4 shrink-0" />
+              <Icon3DLeaveCalendar className="w-5 h-5 shrink-0" />
               <span>{t.tabLeave}</span>
               {pendingLeavesCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-amber-500 text-slate-950 font-bold rounded-full">
@@ -611,39 +559,39 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => onSelectTab('training')}
               style={currentTab === 'training' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'training'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DTrainingClock className="w-4 h-4 shrink-0" />
+              <Icon3DTrainingClock className="w-5 h-5 shrink-0" />
               <span>{t.tabTraining}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('weekly')}
               style={currentTab === 'weekly' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'weekly'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DWeeklyBoard className="w-4 h-4 shrink-0" />
+              <Icon3DWeeklyBoard className="w-5 h-5 shrink-0" />
               <span>{t.tabWeekly}</span>
             </button>
 
             <button
               onClick={() => onSelectTab('projects')}
               style={currentTab === 'projects' ? { backgroundColor: accentColor } : undefined}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                 currentTab === 'projects'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
               }`}
             >
-              <Icon3DProjects className="w-4 h-4 shrink-0" />
+              <Icon3DProjects className="w-5 h-5 shrink-0" />
               <span>{t.tabProjects}</span>
             </button>
 
@@ -652,56 +600,18 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => onSelectTab('audit')}
                 style={currentTab === 'audit' ? { backgroundColor: accentColor } : undefined}
-                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
                   currentTab === 'audit'
                     ? 'text-white shadow-sm'
                     : 'text-slate-200 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <History className="w-4 h-4 shrink-0 text-amber-300" />
+                <History className="w-5 h-5 shrink-0 text-amber-300" />
                 <span>Audit</span>
               </button>
             )}
           </div>
 
-          {/* Admin & Super Admin Direct Nav Bar Image Upload & Edit Controls */}
-          {isAnyAdmin && (
-            <div className="flex items-center gap-1.5 pl-2 ml-1 border-l border-white/15 shrink-0">
-              <input
-                ref={navImageInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleDirectNavImageUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => navImageInputRef.current?.click()}
-                title={
-                  language === 'my'
-                    ? 'Navi Bar တွင် ပုံတင်ရန် (Admin / Super Admin)'
-                    : 'Upload Image to Navigation Bar'
-                }
-                className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 text-amber-300 border border-amber-400/35 transition whitespace-nowrap"
-              >
-                <ImagePlus className="w-3.5 h-3.5" />
-                <span>{language === 'my' ? 'ပုံတင်ရန်' : 'Upload Image'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={onOpenAppearanceSettings}
-                title={
-                  language === 'my'
-                    ? 'Logo နှင့် Navi Bar ပုံ Edit လုပ်ရန်'
-                    : 'Edit Logo, Nav Bar Image & Theme'
-                }
-                className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-[11px] font-bold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition whitespace-nowrap"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-                <span>Edit</span>
-              </button>
-            </div>
-          )}
         </div>
       </nav>
     
