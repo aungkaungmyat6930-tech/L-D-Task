@@ -360,19 +360,58 @@ function NewPasswordForm({
   );
 }
 
-/** Full-screen login layout: the L&D team photo with the form card beside it (stacked on phones). */
+type LoginBranding = {
+  logoType?: 'badge' | 'image';
+  logoText?: string;
+  logoImageDataUrl?: string;
+  loginImageDataUrl?: string;
+};
+
+const BRANDING_CACHE_KEY = 'kbz_ld_login_branding_v1';
+
+/** Logo and team photo for the login page, as set by admins (public, read-only). */
+function useLoginBranding(): LoginBranding {
+  const [branding, setBranding] = useState<LoginBranding>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(BRANDING_CACHE_KEY) || '{}');
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.rpc('get_login_branding').then(({ data, error }) => {
+      if (error || !data || typeof data !== 'object') return;
+      setBranding(data as LoginBranding);
+      try {
+        localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(data));
+      } catch {
+        /* storage full: just don't cache */
+      }
+    });
+  }, []);
+  return branding;
+}
+
+/** Full-screen login layout: the team photo with the form card beside it (stacked on phones). */
 function LoginShell({ children }: { children: React.ReactNode }) {
+  const branding = useLoginBranding();
+  const teamPhoto = branding.loginImageDataUrl || '/login-team.webp';
+  const customLogo = branding.logoType === 'image' && branding.logoImageDataUrl;
+  const logoText = (branding.logoText || 'KBZ').trim() || 'KBZ';
+
   return (
     <div className="min-h-screen w-full bg-[#2a0505] bg-[radial-gradient(ellipse_at_top_left,#8f1212_0%,#4a0909_45%,#1f0404_100%)] flex items-center justify-center p-4 sm:p-6 lg:p-10">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-center">
         <div className="lg:col-span-7">
           <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-black/50 ring-1 ring-white/15">
             <img
-              src="/login-team.webp"
-              alt="KBZ Life Learning & Development team"
-              className="w-full h-auto block"
-              width={1280}
-              height={720}
+              src={teamPhoto}
+              alt="Learning & Development team"
+              className="w-full h-auto max-h-[70vh] object-cover block"
+              onError={(e) => {
+                if (!e.currentTarget.src.endsWith('/login-team.webp')) e.currentTarget.src = '/login-team.webp';
+              }}
             />
           </div>
           <p className="hidden lg:block mt-4 text-center text-sm font-semibold text-amber-100/80 tracking-wide">
@@ -383,10 +422,18 @@ function LoginShell({ children }: { children: React.ReactNode }) {
         <div className="lg:col-span-5">
           <div className="bg-white rounded-3xl shadow-2xl shadow-black/40 p-6 sm:p-8">
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-12 min-w-[3.5rem] px-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500 flex flex-col items-center justify-center shadow-md ring-2 ring-amber-200">
-                <span className="text-base font-black tracking-tight text-slate-900 leading-none">KBZ</span>
-                <span className="text-[8px] font-extrabold tracking-[0.22em] text-slate-900 leading-none mt-0.5">LIFE</span>
-              </div>
+              {customLogo ? (
+                <div className="h-14 w-14 rounded-2xl bg-white flex items-center justify-center shadow-md ring-2 ring-amber-200 overflow-hidden shrink-0">
+                  <img src={branding.logoImageDataUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                </div>
+              ) : (
+                <div className="h-12 min-w-[3.5rem] px-2.5 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500 flex flex-col items-center justify-center shadow-md ring-2 ring-amber-200 shrink-0">
+                  <span className="text-base font-black tracking-tight text-slate-900 leading-none">{logoText}</span>
+                  {logoText.toUpperCase() === 'KBZ' && (
+                    <span className="text-[8px] font-extrabold tracking-[0.22em] text-slate-900 leading-none mt-0.5">LIFE</span>
+                  )}
+                </div>
+              )}
               <div>
                 <p className="text-sm font-extrabold text-slate-900 leading-tight">L&amp;D Task &amp; Work Portal</p>
                 <p className="text-[11px] text-slate-500">ကမ္ဘောဇ အသက်အာမခံ</p>

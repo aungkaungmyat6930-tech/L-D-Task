@@ -164,6 +164,8 @@ export interface AppearanceSettings {
   logoImageDataUrl?: string;
   logoSize?: 'md' | 'lg' | 'xl';
   navbarImageDataUrl?: string;
+  /** Team photo shown on the login page (admins change it in Logo / Theme / Font). */
+  loginImageDataUrl?: string;
 }
 
 export type TabType = 'directory' | 'weekly' | 'tasks' | 'leave' | 'training' | 'projects';

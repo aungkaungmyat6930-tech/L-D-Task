@@ -104,6 +104,9 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
   const [navbarImageDataUrl, setNavbarImageDataUrl] = useState<string>(
     settings.navbarImageDataUrl || ''
   );
+  const [loginImageDataUrl, setLoginImageDataUrl] = useState<string>(settings.loginImageDataUrl || '');
+  const [loginUploadError, setLoginUploadError] = useState<string | null>(null);
+  const loginInputRef = useRef<HTMLInputElement>(null);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [navbarUploadError, setNavbarUploadError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +125,8 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     setLogoImageDataUrl(settings.logoImageDataUrl || '');
     setLogoSize(settings.logoSize || 'lg');
     setNavbarImageDataUrl(settings.navbarImageDataUrl || '');
+    setLoginImageDataUrl(settings.loginImageDataUrl || '');
+    setLoginUploadError(null);
     setLogoUploadError(null);
     setNavbarUploadError(null);
     // Only when the window opens: background updates must not wipe an upload in progress.
@@ -178,6 +183,24 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     }
   };
 
+  const handleLoginImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setLoginUploadError(null);
+      const dataUrl = await processBannerImageFile(file, 1440);
+      setLoginImageDataUrl(dataUrl);
+      onQuickSave?.(
+        { loginImageDataUrl: dataUrl },
+        language === 'my' ? '✅ Login စာမျက်နှာ ပုံကို ပြောင်းပြီး သိမ်းဆည်းပြီးပါပြီ။' : '✅ Login page photo saved.'
+      );
+    } catch (err) {
+      setLoginUploadError(err instanceof Error ? err.message : 'Failed to upload login photo.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const handleApply = (e: React.FormEvent) => {
     e.preventDefault();
     onSaveSettings({
@@ -191,6 +214,7 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       logoImageDataUrl: logoImageDataUrl || undefined,
       logoSize,
       navbarImageDataUrl: navbarImageDataUrl || undefined,
+      loginImageDataUrl: loginImageDataUrl || undefined,
     });
     onClose();
   };
@@ -437,6 +461,62 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
             {navbarUploadError && (
               <p className="text-[11px] text-red-600 font-semibold">{navbarUploadError}</p>
             )}
+          </div>
+
+          {/* 1C. Login page team photo (shown before sign-in; the logo above is used there too) */}
+          <div className="space-y-2.5 bg-red-50/50 border border-red-200 rounded-xl p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <label className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-red-600" />
+                  <span>{language === 'my' ? 'Login စာမျက်နှာ ပုံ (Team ပုံ)' : 'Login Page Photo (Team photo)'}</span>
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {language === 'my'
+                    ? 'Link ဝင်ဝင်ချင်း Login စာမျက်နှာတွင် ပြမည့်ပုံ။ Login စာမျက်နှာ၏ Logo သည် အပေါ်က Portal Logo အတိုင်း ဖြစ်ပါသည်။'
+                    : 'Shown on the login page. The login page uses the Portal Logo above.'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  ref={loginInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLoginImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => loginInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg transition shadow-xs"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{language === 'my' ? 'Login ပုံ ပြောင်းရန်' : 'Change Login Photo'}</span>
+                </button>
+                {loginImageDataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginImageDataUrl('');
+                      onQuickSave?.(
+                        { loginImageDataUrl: undefined },
+                        language === 'my' ? 'မူလ Team ပုံကို ပြန်ထားပြီးပါပြီ။' : 'Back to the default team photo.'
+                      );
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-700 bg-white hover:bg-red-100 border border-red-200 rounded-lg transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{language === 'my' ? 'မူလပုံ ပြန်ထားရန်' : 'Use default'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            <img
+              src={loginImageDataUrl || '/login-team.webp'}
+              alt="Login page photo preview"
+              className="w-full max-h-48 object-cover rounded-lg border border-slate-300"
+            />
+            {loginUploadError && <p className="text-[11px] text-red-600 font-semibold">{loginUploadError}</p>}
           </div>
 
           {/* 2. Portal Theme Color & Accent Color */}
