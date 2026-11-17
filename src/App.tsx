@@ -10,7 +10,8 @@ import {
   AttendanceRecord,
   AttendanceOverrideStatus,
   AppearanceSettings,
-  RoleTier
+  RoleTier,
+  PasswordRequest
 } from './types';
 import { 
   INITIAL_USERS, 
@@ -249,6 +250,10 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
     }
   });
 
+  // "Forgot password" requests from the login page (shared through Supabase; admins act on them).
+  const [passwordRequests, setPasswordRequests] = useState<PasswordRequest[]>([]);
+  const [userModalTab, setUserModalTab] = useState<'onboard' | 'offboard' | 'requests' | undefined>(undefined);
+
   const [currentTab, setCurrentTab] = useState<TabType>('directory');
   const [taskFilterRequest, setTaskFilterRequest] = useState<{
     filter: 'all' | 'my' | 'overdue' | 'due-soon' | 'active' | 'pending' | 'completed';
@@ -427,6 +432,11 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
       key: 'appearance',
       value: appearanceSettings,
       apply: (v: AppearanceSettings) => v && setAppearanceSettings({ ...DEFAULT_APPEARANCE, ...v }),
+    },
+    {
+      key: 'password_requests',
+      value: passwordRequests,
+      apply: (v: PasswordRequest[]) => Array.isArray(v) && setPasswordRequests(v),
     },
     { key: 'admin_password', value: adminPassword, apply: (v: string) => typeof v === 'string' && v && setAdminPassword(v) },
   ];
@@ -1738,6 +1748,11 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
         }}
         language={language}
         onToggleLanguage={handleToggleLanguage}
+        passwordRequestCount={isAdminOrSuper(currentUser.roleTier) ? passwordRequests.length : 0}
+        onOpenPasswordRequests={() => {
+          setUserModalTab('requests');
+          setIsAddUserModalOpen(true);
+        }}
         pendingLeavesCount={pendingLeavesCount}
         overdueTasksCount={overdueTasksCount}
         dueSoonTasksCount={dueSoonTasksCount}
@@ -2077,7 +2092,13 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
       {/* 8. Add New Team Member Modal (Admin) */}
       <UserManagementModal
         isOpen={isAddUserModalOpen}
-        onClose={() => setIsAddUserModalOpen(false)}
+        onClose={() => {
+          setIsAddUserModalOpen(false);
+          setUserModalTab(undefined);
+        }}
+        initialTab={userModalTab}
+        passwordRequests={passwordRequests}
+        onResolvePasswordRequest={(id) => setPasswordRequests((prev) => prev.filter((r) => r.id !== id))}
         currentUser={currentUser}
         allUsers={users}
         onAddUser={handleAddUser}

@@ -71,3 +71,12 @@ export async function sendOverdueEmails(userId?: string): Promise<OverdueEmailRe
     failed: data?.failed ?? [],
   };
 }
+
+/** Login page "forgot password": asks the admins for a temporary password (no sign-in needed). */
+export async function requestPasswordReset(email: string): Promise<string | null> {
+  if (!supabase) return 'Supabase is not configured.';
+  const { error } = await supabase.functions.invoke('staff-admin', {
+    body: { action: 'request_reset', email: email.trim().toLowerCase() },
+  });
+  return error ? 'တောင်းဆိုမှု ပို့၍ မရပါ။ ခဏနေမှ ထပ်ကြိုးစားပါ။ (Could not send the request.)' : null;
+}

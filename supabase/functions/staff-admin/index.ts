@@ -1,4 +1,6 @@
-// Supabase Edge Function for staff logins (admins only). Everyone signs in with email + password.
+// Supabase Edge Function for staff logins. Everyone signs in with email + password.
+//  - request_reset (no sign-in needed): "forgot password" from the login page. Records a request
+//    that admins see in the portal; the admin then gives a temporary password.
 //  - create: create a login with a temporary password (the person must change it on first sign-in).
 //  - set_password: give someone a new temporary password (also creates the login if missing).
 //  - ensure_login: make sure a staff member has a login account.
@@ -16,7 +18,7 @@ const cors = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
-type Staff = { email?: string; roleTier?: string; status?: string; name?: string };
+type Staff = { id?: string; email?: string; roleTier?: string; status?: string; name?: string };
 const norm = (e?: string | null) => (e ?? '').trim().toLowerCase();
 
 Deno.serve(async (req) => {
@@ -49,6 +51,31 @@ Deno.serve(async (req) => {
     }
     return null;
   };
+
+  // "Forgot password" from the login page: leave a request for the admins (no sign-in needed).
+  if (body.action === 'request_reset') {
+    const email = norm(body.email);
+    // Same answer whether or not the email exists, so this can't be used to discover staff emails.
+    const done = json({ ok: true });
+    if (!email || email.length > 200) return done;
+    const person = (await loadStaff()).find((u) => norm(u.email) === email);
+    if (!person || person.status === 'Resigned') return done;
+    const { data } = await admin.from('app_state').select('value').eq('key', 'password_requests').maybeSingle();
+    const list: { id: string; email: string; name?: string; userId?: string; requestedAt: string }[] =
+      Array.isArray(data?.value) ? data!.value : [];
+    if (list.some((r) => norm(r.email) === email)) return done; // already waiting
+    list.push({
+      id: crypto.randomUUID(),
+      email,
+      name: person.name,
+      userId: person.id,
+      requestedAt: new Date().toISOString(),
+    });
+    await admin
+      .from('app_state')
+      .upsert({ key: 'password_requests', value: list.slice(-100), updated_at: new Date().toISOString() });
+    return done;
+  }
 
   // Everything below is for admins only.
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');

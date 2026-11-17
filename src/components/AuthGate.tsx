@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { LogIn, LogOut, Mail, KeyRound, Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { supabase, STATE_TABLE } from '../lib/supabase';
-import { changeOwnPassword } from '../lib/staffLogins';
+import { changeOwnPassword, requestPasswordReset } from '../lib/staffLogins';
 import App from '../App';
 
 type Mode = 'signin' | 'forgot' | 'reset';
@@ -164,11 +164,12 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
     try {
       const cleanEmail = normalize(email);
       if (mode === 'forgot') {
-        const { error } = await client.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: window.location.origin,
-        });
-        if (error) setError(error.message);
-        else setInfo('ဤ Email ဖြင့် Account ရှိပါက Password ပြန်သတ်မှတ်ရန် Link ပို့ပေးပါပြီ။ Inbox / Spam တွင် ကြည့်ပါ။');
+        const err = await requestPasswordReset(cleanEmail);
+        if (err) setError(err);
+        else
+          setInfo(
+            'Admin ထံ တောင်းဆိုမှု ပို့ပြီးပါပြီ။ Admin က ယာယီ Password ပေးပါလိမ့်မည်။ ထို Password ဖြင့် ဝင်ပြီး ကိုယ်ပိုင် Password ပြန်ပြောင်းပါ။ (Request sent to the admins.)'
+          );
         return;
       }
       const { error } = await client.auth.signInWithPassword({ email: cleanEmail, password });
@@ -193,7 +194,7 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
           {forgot ? 'Password မေ့နေပါသလား' : 'ဝန်ထမ်း Login'}
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          {forgot ? 'We will email you a reset link' : 'Sign in to the L&D Task & Work Portal'}
+          {forgot ? 'Admin ထံ ယာယီ Password တောင်းရန် · Ask an admin for a temporary password' : 'Sign in to the L&D Task & Work Portal'}
         </p>
       </div>
 
@@ -244,7 +245,7 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
 
       <button type="submit" disabled={busy} className={btnPrimary}>
         {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-        {forgot ? 'Reset Link ပို့ရန်' : 'ဝင်ရန် · Sign in'}
+        {forgot ? 'Admin ထံ တောင်းဆိုရန်' : 'ဝင်ရန် · Sign in'}
       </button>
 
       <div className="flex items-center justify-between text-xs">
