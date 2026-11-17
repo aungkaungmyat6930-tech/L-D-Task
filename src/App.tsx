@@ -1794,29 +1794,31 @@ export default function App({ authEmail, onSignOut, onSwitchAccount, guest, onSi
 
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full space-y-6">
-        {/* Executive Metrics Overview */}
-        <MetricsOverview
-          activeTasksCount={activeTasksCount}
-          overdueTasksCount={overdueTasksCount}
-          dueSoonTasksCount={dueSoonTasksCount}
-          pendingLeavesCount={pendingLeavesCount}
-          totalTrainingHours={totalTrainingHours}
-          onSelectMetric={(tab, filter) => {
-            setCurrentTab(tab);
-            if (tab === 'tasks') {
-              const targetFilter =
-                filter === 'overdue'
-                  ? 'overdue'
-                  : filter === 'due-soon'
-                  ? 'due-soon'
-                  : 'active';
-              setTaskFilterRequest({ filter: targetFilter, key: Date.now() });
-            } else if (tab === 'leave') {
-              setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
-            }
-          }}
-          language={language}
-        />
+        {/* Summary cards: only on the Team Directory & Sheets tab */}
+        {currentTab === 'directory' && (
+          <MetricsOverview
+            activeTasksCount={activeTasksCount}
+            overdueTasksCount={overdueTasksCount}
+            dueSoonTasksCount={dueSoonTasksCount}
+            pendingLeavesCount={pendingLeavesCount}
+            totalTrainingHours={totalTrainingHours}
+            onSelectMetric={(tab, filter) => {
+              setCurrentTab(tab);
+              if (tab === 'tasks') {
+                const targetFilter =
+                  filter === 'overdue'
+                    ? 'overdue'
+                    : filter === 'due-soon'
+                    ? 'due-soon'
+                    : 'active';
+                setTaskFilterRequest({ filter: targetFilter, key: Date.now() });
+              } else if (tab === 'leave') {
+                setLeaveFilterRequest({ filter: 'pending', key: Date.now() });
+              }
+            }}
+            language={language}
+          />
+        )}
 
         {/* View Routing */}
         {currentTab === 'directory' && (
