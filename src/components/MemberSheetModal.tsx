@@ -878,6 +878,7 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
               onChange={(e) => {
                 const val = e.target.value;
                 if (!isAdmin && val !== 'Office') return;
+                if (val === 'Leave' && currentUser.roleTier !== 'SUPER_ADMIN') return;
                 onSetAttendanceOverride(
                   member.id,
                   row.date,
@@ -903,7 +904,9 @@ export const MemberSheetModal: React.FC<MemberSheetModalProps> = ({
                 </option>
               )}
               <option value="Office">Office</option>
-              {isAdmin && <option value="Leave">Leave</option>}
+              {isAdmin && (currentUser.roleTier === 'SUPER_ADMIN' || selectVal === 'Leave') && (
+                <option value="Leave" disabled={currentUser.roleTier !== 'SUPER_ADMIN'}>Leave</option>
+              )}
             </select>
           </div>
         )}
