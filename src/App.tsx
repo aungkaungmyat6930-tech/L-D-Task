@@ -30,6 +30,7 @@ import { isTaskOverdue, isTaskNearDeadline } from './utils/taskHelpers';
 import { formatTotalTrainerHours } from './utils/trainingHelpers';
 import { useCloudSync } from './lib/cloudSync';
 import { sendOverdueEmails } from './lib/staffLogins';
+import { stageFromTasks } from './utils/projectStage';
 
 // Components
 import { Header } from './components/Header';
@@ -507,6 +508,21 @@ export default function App({ authEmail, onSignOut, onSwitchAccount, guest, onSi
   useEffect(() => {
     if (currentTab === 'audit' && !isAdminOrSuper(currentUser?.roleTier)) setCurrentTab('directory');
   }, [currentTab, currentUser]);
+
+  // Project stage and % follow their tasks' Current Stage automatically.
+  useEffect(() => {
+    if (guest) return;
+    setProjects((prev) => {
+      let changed = false;
+      const next = prev.map((p) => {
+        const auto = stageFromTasks(tasks.filter((t) => t.projectId === p.id));
+        if (!auto || (auto.status === p.status && auto.progress === p.progress)) return p;
+        changed = true;
+        return { ...p, status: auto.status, progress: auto.progress };
+      });
+      return changed ? next : prev;
+    });
+  }, [tasks, projects, guest]);
 
   // Keep the active user in step with the user list (e.g. after edits from another browser).
   // Uses the latest value so it never undoes a switch made in the same update (e.g. on sign-in).

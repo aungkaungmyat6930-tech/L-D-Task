@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { stageFromTasks } from '../utils/projectStage';
 import { StrategicProject, TaskItem, TaskStatus, UserProfile } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { getDayOfWeekCode } from '../utils/weekHelpers';
@@ -414,11 +415,8 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
               ) : (
                 filteredProjects.map((proj) => {
                   const pTasks = tasks.filter((item) => item.projectId === proj.id);
-                  const completedCount = pTasks.filter((tk) => tk.status === 'Completed').length;
-                  const pct =
-                    pTasks.length > 0
-                      ? Math.round((completedCount / pTasks.length) * 100)
-                      : proj.progress;
+                  const autoStage = stageFromTasks(pTasks);
+                  const pct = autoStage ? autoStage.progress : proj.progress;
                   const stageIdx = Math.max(0, PROJECT_STAGES.indexOf(proj.status));
                   const ownerUser = allUsers.find(
                     (u) => u.id === proj.ownerId || u.name === proj.ownerName
@@ -483,6 +481,14 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                             {!isViewer ? (
                               <select
                                 value={proj.status}
+                                disabled={Boolean(autoStage)}
+                                title={
+                                  autoStage
+                                    ? language === 'my'
+                                      ? 'Stage သည် Task များ၏ Current Stage အတိုင်း အလိုအလျောက် ပြောင်းပါသည်'
+                                      : 'Stage follows the tasks automatically'
+                                    : undefined
+                                }
                                 onChange={(e) => {
                                   const nextSt = e.target.value as StrategicProject['status'];
                                   if (nextSt === 'Completed' && !isAdmin) {
@@ -1072,11 +1078,8 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
       {/* Modal 3: Public Project Stage, Assignees, Who's Doing What & Open Editing Modal */}
       {detailProject && (() => {
         const dTasks = tasks.filter((item) => item.projectId === detailProject.id);
-        const dCompleted = dTasks.filter((tk) => tk.status === 'Completed').length;
-        const dProgress =
-          dTasks.length > 0
-            ? Math.round((dCompleted / dTasks.length) * 100)
-            : detailProject.progress;
+        const dAuto = stageFromTasks(dTasks);
+        const dProgress = dAuto ? dAuto.progress : detailProject.progress;
         const dStageIdx = Math.max(0, PROJECT_STAGES.indexOf(detailProject.status));
 
         // Build per-member task breakdown ("Who is doing what")
@@ -1190,9 +1193,9 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                           <button
                             key={st}
                             type="button"
-                            disabled={isViewer}
+                            disabled={isViewer || Boolean(dAuto)}
                             onClick={() => {
-                              if (!isViewer) {
+                              if (!isViewer && !dAuto) {
                                 if (st === 'Completed' && !isAdmin) {
                                   onRequestProjectCompletion(detailProject.id);
                                   return;
@@ -1205,7 +1208,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                               }
                             }}
                             className={`text-left space-y-1 p-1.5 rounded-lg transition ${
-                              !isViewer ? 'hover:bg-white cursor-pointer' : 'cursor-default'
+                              !isViewer && !dAuto ? 'hover:bg-slate-50 cursor-pointer' : 'cursor-default'
                             }`}
                           >
                             <div
@@ -1232,6 +1235,15 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                         );
                       })}
                     </div>
+                  <p className="mt-2 text-[11px] text-slate-500 text-center">
+                    {dAuto
+                      ? language === 'my'
+                        ? `Stage သည် Task များ၏ Current Stage အတိုင်း အလိုအလျောက် ပြောင်းပါသည် (${dTasks.filter((t) => t.status === 'Completed').length} / ${dTasks.filter((t) => t.status !== 'Cancelled').length} ပြီးစီး)`
+                        : `Stage follows the tasks automatically (${dTasks.filter((t) => t.status === 'Completed').length} / ${dTasks.filter((t) => t.status !== 'Cancelled').length} done)`
+                      : language === 'my'
+                      ? 'Task မရှိသေးပါ — Stage ကို နှိပ်၍ ပြောင်းနိုင်ပါသည်'
+                      : 'No tasks yet — click a stage to set it'}
+                  </p>
                 </div>
 
                 {/* Project Completion Approval Bar (Member Request + Admin/Super Admin Approve / Pending / Reject) */}
