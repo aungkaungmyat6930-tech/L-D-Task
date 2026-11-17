@@ -191,7 +191,7 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
     <form onSubmit={submit} className="space-y-4">
       <div>
         <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-          {forgot ? 'Password မေ့နေပါသလား' : 'ဝန်ထမ်း Login'}
+          {forgot ? 'Password မေ့နေပါသလား' : 'Login'}
         </h2>
         <p className="text-xs text-slate-500 mt-0.5">
           {forgot ? 'Admin ထံ ယာယီ Password တောင်းရန် · Ask an admin for a temporary password' : 'Sign in to the L&D Task & Work Portal'}
