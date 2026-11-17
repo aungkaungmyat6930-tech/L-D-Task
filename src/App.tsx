@@ -1793,7 +1793,13 @@ export default function App({ authEmail, onSignOut, onSwitchAccount, guest, onSi
       />
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full space-y-6">
+      <main
+        className={
+          currentTab === 'projects'
+            ? 'w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-12 py-6 flex-grow flex flex-col'
+            : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full space-y-6'
+        }
+      >
         {/* Summary cards: only on the Team Directory & Sheets tab */}
         {currentTab === 'directory' && (
           <MetricsOverview

@@ -347,7 +347,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
   );
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="flex-1 flex flex-col gap-6 animate-fadeIn">
       {/* Launch Project (admins), right above the Strategic Planning table */}
       {isAdmin && (
         <div className="flex justify-end">
@@ -362,7 +362,7 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
       )}
 
       {/* Overall Strategic Projects Table (Click any topic to view/manage individually) */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex-1 min-h-[60vh] bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold flex items-center gap-2">
