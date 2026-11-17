@@ -348,152 +348,18 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Top Banner */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900 flex flex-wrap items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-blue-600" />
-              <span>
-                {language === 'my'
-                  ? 'L&D မဟာဗျူဟာမြောက် စီမံကိန်းများ (Strategic Projects)'
-                  : 'Strategic L&D Projects, Tasks & Follow-up Workspace'}
-              </span>
-              <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-200 inline-flex items-center gap-1">
-                <Eye className="w-3 h-3" />
-                {language === 'my' ? 'လူတိုင်း ဝင်ကြည့်နိုင်သည်' : 'Visible to Everyone'}
-              </span>
-              {isAdmin && (
-                <span className="text-[10px] font-extrabold bg-purple-100 text-purple-800 px-2 py-0.5 rounded border border-purple-200 inline-flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" />
-                  Admin Mode
-                </span>
-              )}
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {language === 'my'
-                ? 'ခေါင်းစဉ်တစ်ခုချင်းစီတွင် မည်သူ့ကို တာဝန်ပေးထားသည်နှင့် မည်သည့်အဆင့်ရောက်နေပြီကို လူတိုင်းကြည့်ရှုနိုင်ပြီး Admin မှ Deadline Setup ခွင့်ပြုချက်နှင့် Task များကို စီမံနိုင်ပါသည်'
-                : 'Everyone can view assignees, progress stages, and deadlines per project; Admin controls project tasks & universal deadline setup permissions'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Admin Deadline Setup Control Toggle */}
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={() => onToggleAllowMemberDeadlineSetup(!allowMemberDeadlineSetup)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border shadow-2xs transition ${
-                  allowMemberDeadlineSetup
-                    ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
-                    : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-                }`}
-                title={
-                  language === 'my'
-                    ? 'အဖွဲ့ဝင်တိုင်း Deadline Setup လုပ်ခွင့် ဖွင့်/ပိတ်ရန် (Admin Control)'
-                    : 'Toggle whether all team members can set up deadlines'
-                }
-              >
-                {allowMemberDeadlineSetup ? (
-                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <Lock className="w-3.5 h-3.5 text-slate-500" />
-                )}
-                <span>
-                  {language === 'my'
-                    ? `လူတိုင်း Deadline Setup ခွင့်: ${allowMemberDeadlineSetup ? 'ON' : 'OFF'}`
-                    : `All-Member Deadline Setup: ${allowMemberDeadlineSetup ? 'ON' : 'OFF'}`}
-                </span>
-              </button>
-            ) : (
-              <span
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-xl border ${
-                  canSetupDeadline
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                    : 'bg-slate-50 text-slate-600 border-slate-200'
-                }`}
-              >
-                {canSetupDeadline ? (
-                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
-                ) : (
-                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                )}
-                <span>
-                  {canSetupDeadline
-                    ? language === 'my'
-                      ? 'Deadline Setup လုပ်ခွင့်ရှိသည် (Admin ခွင့်ပြု)'
-                      : 'Deadline Setup Enabled by Admin'
-                    : language === 'my'
-                    ? 'Deadline Setup (Admin သီးသန့်)'
-                    : 'Deadline Setup: Admin Only'}
-                </span>
-              </span>
-            )}
-
-            {isAdmin && (
-              <button
-                onClick={openCreateProjectModal}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{language === 'my' ? 'Project အသစ် စတင်ရန် (Admin)' : 'Launch Project (Admin)'}</span>
-              </button>
-            )}
-          </div>
+      {/* Launch Project (admins), right above the Strategic Planning table */}
+      {isAdmin && (
+        <div className="flex justify-end">
+          <button
+            onClick={openCreateProjectModal}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>{language === 'my' ? 'Project အသစ် စတင်ရန် (Admin)' : 'Launch Project (Admin)'}</span>
+          </button>
         </div>
-
-        {/* Summary & Filter Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <span className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 font-bold text-slate-800 tabular-nums">
-              {language === 'my' ? 'စီမံကိန်း' : 'Projects'}: {projects.length}
-            </span>
-            <span className="px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 font-bold text-blue-900 tabular-nums">
-              {language === 'my' ? 'Project Task စုစုပေါင်း' : 'Project Tasks'}: {projectTasksAll.length}
-            </span>
-            <span
-              className={`px-3 py-1.5 rounded-lg border font-bold tabular-nums ${
-                dueFollowupsCount > 0
-                  ? 'bg-amber-50 border-amber-300 text-amber-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-600'
-              }`}
-            >
-              {language === 'my' ? 'Follow-up စစ်ဆေးရန်' : 'Follow-up Due'}: {dueFollowupsCount}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => setFilterMode('all')}
-              className={`px-3 py-1 rounded-lg transition ${
-                filterMode === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              {language === 'my' ? 'အားလုံး' : 'All Projects'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterMode('followup')}
-              className={`px-3 py-1 rounded-lg transition flex items-center gap-1 ${
-                filterMode === 'followup' ? 'bg-amber-500 text-white shadow-xs' : 'text-amber-800'
-              }`}
-            >
-              <BellRing className="w-3.5 h-3.5" />
-              <span>{language === 'my' ? 'Follow-up လိုက်ရန်' : 'Follow-ups'} ({dueFollowupsCount})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterMode('my')}
-              className={`px-3 py-1 rounded-lg transition ${
-                filterMode === 'my' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600'
-              }`}
-            >
-              {language === 'my' ? 'ကိုယ်ပါဝင်သည့် Project' : 'My Projects'}
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Overall Strategic Projects Table (Click any topic to view/manage individually) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
