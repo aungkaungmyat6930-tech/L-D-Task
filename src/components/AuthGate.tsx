@@ -22,6 +22,8 @@ function SupabaseAuthGate() {
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>('signin');
   const [access, setAccess] = useState<Access>('checking');
+  // Email to fill in on the login form (e.g. after choosing another admin in the user list).
+  const [prefillEmail, setPrefillEmail] = useState('');
   // Set once the person replaced their temporary password in this session.
   const [passwordChanged, setPasswordChanged] = useState(false);
 
@@ -95,7 +97,7 @@ function SupabaseAuthGate() {
   if (!session) {
     return (
       <LoginShell>
-        <LoginForm mode={mode} setMode={setMode} />
+        <LoginForm key={prefillEmail} mode={mode} setMode={setMode} initialEmail={prefillEmail} />
       </LoginShell>
     );
   }
@@ -144,12 +146,32 @@ function SupabaseAuthGate() {
     );
   }
 
-  return <App authEmail={session.user.email} onSignOut={signOut} />;
+  return (
+    <App
+      authEmail={session.user.email}
+      onSignOut={() => {
+        setPrefillEmail('');
+        signOut();
+      }}
+      onSwitchAccount={async (email) => {
+        setPrefillEmail(email);
+        await signOut();
+      }}
+    />
+  );
 }
 
-function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
+function LoginForm({
+  mode,
+  setMode,
+  initialEmail = '',
+}: {
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  initialEmail?: string;
+}) {
   const client = supabase!;
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -222,6 +244,7 @@ function LoginForm({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }
             <input
               type={showPassword ? 'text' : 'password'}
               required
+              autoFocus={Boolean(initialEmail)}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

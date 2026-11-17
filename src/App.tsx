@@ -95,6 +95,8 @@ interface AppProps {
   /** Email of the signed-in staff member (Supabase Auth). Undefined when login is not configured. */
   authEmail?: string;
   onSignOut?: () => void;
+  /** Signed in: switch to another admin account by signing in as them (login form, email filled in). */
+  onSwitchAccount?: (email: string) => void;
   /** Visitor who is not signed in: can act as any Member/Viewer; admin work needs sign-in. */
   guest?: boolean;
   onSignIn?: () => void;
@@ -111,7 +113,7 @@ const GUEST_PROFILE: UserProfile = {
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
 };
 
-export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps = {}) {
+export default function App({ authEmail, onSignOut, onSwitchAccount, guest, onSignIn }: AppProps = {}) {
   // State Initialization from LocalStorage or Defaults
   const [users, setUsers] = useState<UserProfile[]>(() => {
     try {
@@ -569,6 +571,34 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
           : "You can't act as a Super Admin. Only Super Admins can approve leave."
       );
       return;
+    }
+
+    // Signed in: back to your own account needs no password; another admin's account
+    // needs that person's own sign-in (login form), not the old shared admin password.
+    if (authEmail && authProfile) {
+      if (found.id === authProfile.id) {
+        if (isAdminOrSuper(found.roleTier)) {
+          setIsAdminUnlocked(true);
+          try {
+            sessionStorage.setItem(SESSION_ADMIN_UNLOCKED, 'true');
+          } catch {}
+        }
+        setCurrentUser(found);
+        showToast(
+          language === 'my' ? `ကိုယ်ပိုင်အကောင့် (${found.name}) သို့ ပြန်ပြောင်းပြီးပါပြီ။` : `Back to your own account (${found.name}).`
+        );
+        return;
+      }
+      if (isAdminOrSuper(found.roleTier)) {
+        if (found.email && onSwitchAccount) onSwitchAccount(found.email);
+        else
+          showToast(
+            language === 'my'
+              ? `${found.name} အဖြစ် ဝင်ရန် ၎င်း၏ Email နှင့် Password ဖြင့် Login ဝင်ပါ။`
+              : `Sign in with ${found.name}'s own email and password to use their account.`
+          );
+        return;
+      }
     }
 
     // Visitors: admin accounts need a real sign-in with email and password.
@@ -1741,11 +1771,15 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
         onOpenEditProfile={() => handleOpenEditProfile(currentUser)}
         onOpenOrgChart={() => setIsOrgChartModalOpen(true)}
         onResetData={handleResetData}
-        onOpenChangeAdminPassword={() => {
-          setPendingAdminUser(null);
-          setAdminPwdMode('change');
-          setAdminPwdModalOpen(true);
-        }}
+        onOpenChangeAdminPassword={
+          authEmail
+            ? undefined
+            : () => {
+                setPendingAdminUser(null);
+                setAdminPwdMode('change');
+                setAdminPwdModalOpen(true);
+              }
+        }
         onLockAdmin={handleLockAdmin}
         onOpenAppearanceSettings={() => setIsAppearanceModalOpen(true)}
         onQuickUpdateAppearance={(patch, feedbackMsg) => {
@@ -2134,11 +2168,15 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
         onUpdateUserRole={handleUpdateUserRole}
         onDeleteUser={handleDeleteUser}
         onOpenEditProfile={handleOpenEditProfile}
-        onOpenChangeAdminPassword={() => {
-          setPendingAdminUser(null);
-          setAdminPwdMode('change');
-          setAdminPwdModalOpen(true);
-        }}
+        onOpenChangeAdminPassword={
+          authEmail
+            ? undefined
+            : () => {
+                setPendingAdminUser(null);
+                setAdminPwdMode('change');
+                setAdminPwdModalOpen(true);
+              }
+        }
         language={language}
       />
 

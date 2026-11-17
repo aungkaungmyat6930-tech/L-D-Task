@@ -46,7 +46,7 @@ interface HeaderProps {
   onOpenEditProfile: () => void;
   onOpenOrgChart: () => void;
   onResetData: () => void;
-  onOpenChangeAdminPassword: () => void;
+  onOpenChangeAdminPassword?: () => void;
   onLockAdmin: () => void;
   onOpenAppearanceSettings: () => void;
   onQuickUpdateAppearance?: (patch: Partial<AppearanceSettings>, feedbackMsg?: string) => void;
@@ -423,6 +423,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Palette className="w-3.5 h-3.5 text-cyan-300" />
                   <span>{language === 'my' ? 'Logo / Theme / Font' : 'Theme & Logo'}</span>
                 </button>
+                {onOpenChangeAdminPassword && (
                 <button
                   onClick={onOpenChangeAdminPassword}
                   title={language === 'my' ? 'Admin Password ပြောင်းရန်' : 'Change Admin Password'}
@@ -433,6 +434,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {language === 'my' ? 'Password ပြောင်း' : 'Change Password'}
                   </span>
                 </button>
+                )}
                 <button
                   onClick={onLockAdmin}
                   title={language === 'my' ? 'Admin Lock ချရန်' : 'Lock Admin Session'}
