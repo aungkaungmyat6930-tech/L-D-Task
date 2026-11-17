@@ -1,10 +1,8 @@
-// Supabase Edge Function for staff logins.
-//  - email_login (no sign-in needed): Members/Viewers in the staff list sign in with just their email.
-//    Admins/Super Admins are told to use their password instead.
-//  - create / set_password (admins only): create a login with a password, or change it.
-//  - ensure_login (admins only): make sure a staff member has a login account (no password,
-//    for email-only members), so they show in Authentication -> Users right away.
-//  - delete_login (admins only): remove the login account of a deleted staff member.
+// Supabase Edge Function for staff logins (admins only). Everyone signs in with email + password.
+//  - create: create a login with a temporary password (the person must change it on first sign-in).
+//  - set_password: give someone a new temporary password (also creates the login if missing).
+//  - ensure_login: make sure a staff member has a login account.
+//  - delete_login: remove the login account of a deleted staff member.
 // Deploy in Supabase Dashboard -> Edge Functions -> Deploy a new function, name: staff-admin.
 // The service-role key is provided by Supabase automatically; it never reaches the browser.
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -51,35 +49,6 @@ Deno.serve(async (req) => {
     }
     return null;
   };
-
-  // Email-only sign-in for Members and Viewers.
-  if (body.action === 'email_login') {
-    const email = norm(body.email);
-    if (!email) return json({ error: 'Email is required.' }, 400);
-    const person = (await loadStaff()).find((u) => norm(u.email) === email);
-    if (!person) return json({ error: 'This email is not in the staff list. Ask an admin to add it.' }, 404);
-    if (person.status === 'Resigned') return json({ error: 'This staff member is marked Resigned.' }, 403);
-    if (['ADMIN', 'SUPER_ADMIN'].includes(person.roleTier ?? '')) return json({ needsPassword: true });
-
-    try {
-      if (!(await findAuthUser(email))) {
-        const { error } = await admin.auth.admin.createUser({
-          email,
-          password: crypto.randomUUID() + crypto.randomUUID(),
-          email_confirm: true,
-        });
-        if (error) return json({ error: error.message }, 400);
-      }
-      // Generates a one-time sign-in token without sending any email.
-      const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email });
-      if (error || !data?.properties?.hashed_token) {
-        return json({ error: error?.message ?? 'Could not sign in.' }, 400);
-      }
-      return json({ token_hash: data.properties.hashed_token });
-    } catch (e) {
-      return json({ error: (e as Error).message ?? 'Something went wrong.' }, 500);
-    }
-  }
 
   // Everything below is for admins only.
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
@@ -143,18 +112,32 @@ Deno.serve(async (req) => {
       if (existing) {
         return json({ error: 'This email already has a login. Use "Set password" to change it.', exists: true }, 409);
       }
-      const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+      const { error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { must_change_password: true },
+      });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true, created: true });
     }
 
     if (body.action === 'set_password') {
       if (!existing) {
-        const { error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
+        const { error } = await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { must_change_password: true },
+        });
         if (error) return json({ error: error.message }, 400);
         return json({ ok: true, created: true });
       }
-      const { error } = await admin.auth.admin.updateUserById(existing.id, { password, email_confirm: true });
+      const { error } = await admin.auth.admin.updateUserById(existing.id, {
+        password,
+        email_confirm: true,
+        user_metadata: { ...(existing.user_metadata ?? {}), must_change_password: true },
+      });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true, updated: true });
     }
