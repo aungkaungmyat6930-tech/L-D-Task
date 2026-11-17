@@ -1,7 +1,7 @@
 -- Audit log: Supabase records every change to the portal data (who, what, when).
 -- Written by a database trigger, so it can't be edited or skipped from the website.
 -- Only signed-in, active Admins and Super Admins can read it.
--- Run once in Supabase SQL Editor (after schema.sql and auth.sql).
+-- Run in Supabase SQL Editor (after schema.sql and auth.sql). Safe to run again after updates.
 
 create table if not exists public.audit_log (
   id          bigserial primary key,
@@ -13,6 +13,9 @@ create table if not exists public.audit_log (
   item_label  text,
   fields      text[]                -- which fields changed (for "changed")
 );
+
+-- Whose record it was (task owner, leave/attendance member, trainer, the staff member).
+alter table public.audit_log add column if not exists item_owner text;
 
 create index if not exists audit_log_at_idx on public.audit_log (at desc);
 
@@ -66,6 +69,45 @@ as $$
   end;
 $$;
 
+-- Name of a staff member by id (falls back to the name stored on the record).
+create or replace function public.audit_staff_name(p_id text, p_fallback text)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select u->>'name' from public.app_state s, jsonb_array_elements(s.value) u
+      where s.key = 'users' and u->>'id' = p_id limit 1),
+    nullif(p_fallback, ''));
+$$;
+
+-- Whose record it is: owner (plus co-assignees) for tasks/projects, the member for
+-- leaves/attendance, the trainer for training, the person for staff profiles.
+create or replace function public.audit_item_owner(p_key text, p_item jsonb)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case p_key
+    when 'tasks' then concat_ws(' + ',
+      public.audit_staff_name(p_item->>'ownerId', p_item->>'ownerName'),
+      nullif(array_to_string(array(
+        select coalesce(public.audit_staff_name(c.id, null), c.id)
+        from jsonb_array_elements_text(coalesce(p_item->'coAssigneeIds', '[]'::jsonb)) as c(id)), ', '), ''))
+    when 'projects' then public.audit_staff_name(p_item->>'ownerId', p_item->>'ownerName')
+    when 'leaves' then public.audit_staff_name(p_item->>'memberId', p_item->>'memberName')
+    when 'attendance' then public.audit_staff_name(p_item->>'memberId', null)
+    when 'training' then nullif(p_item->>'trainerName', '')
+    when 'users' then p_item->>'name'
+    when 'password_requests' then p_item->>'name'
+    else null
+  end;
+$$;
+
 create or replace function public.log_app_state_change()
 returns trigger
 language plpgsql
@@ -88,23 +130,26 @@ begin
   begin
     if jsonb_typeof(v_new) = 'array' and (v_old is null or jsonb_typeof(v_old) = 'array') then
       -- Lists of records with an "id": log each added / removed / changed record.
-      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields)
-      select v_actor, new.key, 'added', n->>'id', public.audit_item_label(new.key, n), null
+      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields, item_owner)
+      select v_actor, new.key, 'added', n->>'id', public.audit_item_label(new.key, n), null,
+             public.audit_item_owner(new.key, n)
       from jsonb_array_elements(v_new) n
       where not exists (
         select 1 from jsonb_array_elements(coalesce(v_old, '[]'::jsonb)) o where o->>'id' = n->>'id');
 
-      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields)
-      select v_actor, new.key, 'removed', o->>'id', public.audit_item_label(new.key, o), null
+      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields, item_owner)
+      select v_actor, new.key, 'removed', o->>'id', public.audit_item_label(new.key, o), null,
+             public.audit_item_owner(new.key, o)
       from jsonb_array_elements(coalesce(v_old, '[]'::jsonb)) o
       where not exists (
         select 1 from jsonb_array_elements(v_new) n where n->>'id' = o->>'id');
 
-      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields)
+      insert into public.audit_log (actor_email, area, action, item_id, item_label, fields, item_owner)
       select v_actor, new.key, 'changed', n->>'id', public.audit_item_label(new.key, n),
              (select array_agg(k order by k)
                 from (select jsonb_object_keys(o || n) as k) keys
-               where (o -> k) is distinct from (n -> k))
+               where (o -> k) is distinct from (n -> k)),
+             public.audit_item_owner(new.key, n)
       from jsonb_array_elements(v_new) n
       join jsonb_array_elements(coalesce(v_old, '[]'::jsonb)) o on o->>'id' = n->>'id'
       where o is distinct from n;
