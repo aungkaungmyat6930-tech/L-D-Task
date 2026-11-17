@@ -236,9 +236,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white whitespace-nowrap">
                 {t.brandName}
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-amber-300 bg-amber-500/15 border border-amber-400/30 px-3 py-1 rounded-lg whitespace-nowrap">
-                {t.subBrand}
-              </span>
             </div>
             <p className="text-sm sm:text-base text-slate-300/90 hidden sm:block mt-2">
               {t.portalTagline}
