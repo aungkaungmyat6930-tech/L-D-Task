@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { UserProfile, RoleTier, MemberStatus } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { UserProfile, RoleTier, MemberStatus, PasswordRequest } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
 import { processProfilePhotoFile } from '../utils/imageUpload';
 import { isAdminOrSuper } from '../utils/roleHelpers';
@@ -35,6 +35,10 @@ interface UserManagementModalProps {
   onDeleteUser: (userId: string) => void;
   onOpenEditProfile: (user: UserProfile) => void;
   onOpenChangeAdminPassword?: () => void;
+  /** Tab to show when the window opens (e.g. from the "forgot password" notification). */
+  initialTab?: 'onboard' | 'offboard' | 'requests';
+  passwordRequests?: PasswordRequest[];
+  onResolvePasswordRequest?: (id: string) => void;
   language: Language;
 }
 
@@ -49,10 +53,20 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
   onDeleteUser,
   onOpenEditProfile,
   onOpenChangeAdminPassword,
+  initialTab,
+  passwordRequests = [],
+  onResolvePasswordRequest,
   language,
 }) => {
   const t = TRANSLATIONS[language];
-  const [activeTab, setActiveTab] = useState<'onboard' | 'offboard'>('onboard');
+  const [activeTab, setActiveTab] = useState<'onboard' | 'offboard' | 'requests'>('onboard');
+  // Temporary passwords typed per request, and the request being processed.
+  const [requestPw, setRequestPw] = useState<Record<string, string>>({});
+  const [requestBusyId, setRequestBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && initialTab) setActiveTab(initialTab);
+  }, [isOpen, initialTab]);
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
     message: string;
@@ -380,6 +394,28 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                   : `Staff Roster & Offboarding (${allUsers.length})`}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('requests')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-bold transition ${
+                activeTab === 'requests'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{language === 'my' ? 'Password တောင်းဆိုမှုများ' : 'Password Requests'}</span>
+              {passwordRequests.length > 0 && (
+                <span
+                  className={`min-w-[1.25rem] px-1.5 py-0.5 rounded-full text-[10px] font-black tabular-nums ${
+                    activeTab === 'requests' ? 'bg-white text-red-700' : 'bg-red-600 text-white'
+                  }`}
+                >
+                  {passwordRequests.length}
+                </span>
+              )}
+            </button>
           </div>
 
           <div className="flex items-center gap-2 text-[11px] font-bold">
@@ -620,6 +656,116 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         )}
 
         {/* Tab 2: Staff Roster & Offboarding Management */}
+        {/* Tab 3: "Forgot password" requests from the login page */}
+        {activeTab === 'requests' && (
+          <div className="p-6 space-y-4 overflow-y-auto">
+            {loginNotice && (
+              <div
+                className={`flex items-start justify-between gap-3 text-xs font-semibold rounded-lg px-3 py-2 border ${
+                  loginNotice.ok
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                }`}
+              >
+                <span>{loginNotice.text}</span>
+                <button type="button" onClick={() => setLoginNotice(null)} className="shrink-0 opacity-60 hover:opacity-100">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {language === 'my'
+                ? 'Login စာမျက်နှာတွင် "Password မေ့နေပါသလား?" နှိပ်ထားသော ဝန်ထမ်းများ။ ယာယီ Password ရိုက်ပြီး ပေးပါ။ ထို Password ကို ဝန်ထမ်းထံ ပြောပြပါ။ ဝန်ထမ်းက ဝင်ပြီး ကိုယ်ပိုင် Password ပြန်ပြောင်းရပါမည်။'
+                : 'Staff who pressed "Forgot password" on the login page. Type a temporary password and give it; tell the person the password. They must choose their own after signing in.'}
+            </p>
+            {passwordRequests.length === 0 ? (
+              <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center text-xs text-slate-400">
+                {language === 'my' ? 'Password တောင်းဆိုမှု မရှိပါ။' : 'No password requests.'}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {[...passwordRequests]
+                  .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
+                  .map((req) => {
+                    const person =
+                      allUsers.find((u) => u.id === req.userId) ||
+                      allUsers.find((u) => (u.email || '').toLowerCase() === req.email.toLowerCase());
+                    const pw = requestPw[req.id] || '';
+                    const busy = requestBusyId === req.id;
+                    return (
+                      <div key={req.id} className="border border-red-200 bg-red-50/50 rounded-xl p-3.5 flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2.5 min-w-[200px] flex-1">
+                          {person?.avatar ? (
+                            <img src={person.avatar} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full object-cover border border-slate-200 bg-slate-100" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center">
+                              <KeyRound className="w-4 h-4" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 truncate">{person?.name || req.name || req.email}</p>
+                            <p className="text-[11px] text-slate-500 truncate">{req.email}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {new Date(req.requestedAt).toLocaleString(language === 'my' ? 'my-MM' : 'en-GB', {
+                                dateStyle: 'medium',
+                                timeStyle: 'short',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={pw}
+                          onChange={(e) => setRequestPw((prev) => ({ ...prev, [req.id]: e.target.value }))}
+                          placeholder={language === 'my' ? 'ယာယီ Password (၆ လုံး+)' : 'Temporary password (6+)'}
+                          className="text-xs px-3 py-2 border border-red-300 rounded-lg font-mono bg-white w-44 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                        <button
+                          type="button"
+                          disabled={busy || pw.length < 6}
+                          onClick={async () => {
+                            setRequestBusyId(req.id);
+                            const res = await manageStaffLogin('set_password', req.email, pw);
+                            setRequestBusyId(null);
+                            if (res.ok) {
+                              onResolvePasswordRequest?.(req.id);
+                              setRequestPw((prev) => {
+                                const next = { ...prev };
+                                delete next[req.id];
+                                return next;
+                              });
+                              setLoginNotice({
+                                ok: true,
+                                text:
+                                  language === 'my'
+                                    ? `✅ ${person?.name || req.email} ၏ ယာယီ Password: "${pw}" — ဤ Password ကို ${person?.name || 'ဝန်ထမ်း'} ထံ ပြောပြပါ။ ဝင်ပြီး ကိုယ်ပိုင် Password ပြောင်းရပါမည်။`
+                                    : `✅ Temporary password for ${person?.name || req.email}: "${pw}". Tell them this password; they must change it after signing in.`,
+                              });
+                            } else {
+                              setLoginNotice({ ok: false, text: `⚠️ ${res.error}` });
+                            }
+                          }}
+                          className="px-3 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {busy ? '...' : language === 'my' ? 'ယာယီ Password ပေးမည်' : 'Give temporary password'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onResolvePasswordRequest?.(req.id)}
+                          className="px-2.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                          title={language === 'my' ? 'တောင်းဆိုမှုကို ပယ်ရန်' : 'Dismiss request'}
+                        >
+                          {language === 'my' ? 'ပယ်ရန်' : 'Dismiss'}
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'offboard' && (
           <div className="p-6 space-y-4 overflow-y-auto">
             {loginNotice && (

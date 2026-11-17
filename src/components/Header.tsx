@@ -56,6 +56,9 @@ interface HeaderProps {
   language: Language;
   onToggleLanguage: () => void;
   pendingLeavesCount: number;
+  /** Admins: number of "forgot password" requests waiting for a temporary password. */
+  passwordRequestCount?: number;
+  onOpenPasswordRequests?: () => void;
   overdueTasksCount: number;
   dueSoonTasksCount: number;
 }
@@ -83,6 +86,8 @@ export const Header: React.FC<HeaderProps> = ({
   language,
   onToggleLanguage,
   pendingLeavesCount,
+  passwordRequestCount = 0,
+  onOpenPasswordRequests,
   overdueTasksCount,
   dueSoonTasksCount,
 }) => {
@@ -440,6 +445,24 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Admins: staff who forgot their password and are waiting for a temporary one */}
+      {isAnyAdmin && passwordRequestCount > 0 && onOpenPasswordRequests && (
+        <button
+          type="button"
+          onClick={onOpenPasswordRequests}
+          className="w-full bg-gradient-to-r from-red-700 to-red-600 hover:from-red-800 hover:to-red-700 text-white px-4 py-1.5 text-xs font-bold transition"
+        >
+          <span className="max-w-7xl mx-auto flex items-center justify-center gap-2">
+            <Bell className="w-4 h-4 text-amber-200 animate-pulse" />
+            <span>
+              {language === 'my'
+                ? `ဝန်ထမ်း ${passwordRequestCount} ဦး Password မေ့နေပါသည် — ယာယီ Password ပေးရန် နှိပ်ပါ`
+                : `${passwordRequestCount} staff forgot their password — click to give a temporary one`}
+            </span>
+          </span>
+        </button>
+      )}
 
       {/* Admin Alert Notice Bar if overdue, near deadline, or pending leaves exist */}
       {(pendingLeavesCount > 0 || overdueTasksCount > 0 || dueSoonTasksCount > 0) && (
