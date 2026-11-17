@@ -80,6 +80,15 @@ const STORAGE_KEYS = {
 
 const SESSION_ADMIN_UNLOCKED = 'kbz_ld_admin_unlocked_v1';
 
+/** Browser storage is only a cache (Supabase holds the data); a full storage must never crash the app. */
+function safeSetItem(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn(`[storage] could not cache "${key}" in this browser:`, err);
+  }
+}
+
 interface AppProps {
   /** Email of the signed-in staff member (Supabase Auth). Undefined when login is not configured. */
   authEmail?: string;
@@ -323,49 +332,49 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
 
   // Sync with LocalStorage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+    safeSetItem(STORAGE_KEYS.USERS, JSON.stringify(users));
   }, [users]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
+    safeSetItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
   }, [tasks]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.LEAVES, JSON.stringify(leaves));
+    safeSetItem(STORAGE_KEYS.LEAVES, JSON.stringify(leaves));
   }, [leaves]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TRAINING, JSON.stringify(trainingLogs));
+    safeSetItem(STORAGE_KEYS.TRAINING, JSON.stringify(trainingLogs));
   }, [trainingLogs]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
+    safeSetItem(STORAGE_KEYS.PROJECTS, JSON.stringify(projects));
   }, [projects]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.LANG, language);
+    safeSetItem(STORAGE_KEYS.LANG, language);
   }, [language]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem(STORAGE_KEYS.ACTIVE_USER, currentUser.id);
+      safeSetItem(STORAGE_KEYS.ACTIVE_USER, currentUser.id);
     }
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ADMIN_PWD, adminPassword);
+    safeSetItem(STORAGE_KEYS.ADMIN_PWD, adminPassword);
   }, [adminPassword]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(attendanceOverrides));
+    safeSetItem(STORAGE_KEYS.ATTENDANCE, JSON.stringify(attendanceOverrides));
   }, [attendanceOverrides]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ALLOW_MEMBER_DEADLINE, String(allowMemberDeadlineSetup));
+    safeSetItem(STORAGE_KEYS.ALLOW_MEMBER_DEADLINE, String(allowMemberDeadlineSetup));
   }, [allowMemberDeadlineSetup]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.APPEARANCE, JSON.stringify(appearanceSettings));
+    safeSetItem(STORAGE_KEYS.APPEARANCE, JSON.stringify(appearanceSettings));
     const fontSizeMap: Record<AppearanceSettings['fontScale'], number> = {
       sm: 14,
       md: 16,
@@ -2121,6 +2130,10 @@ export default function App({ authEmail, onSignOut, guest, onSignIn }: AppProps 
         isOpen={isAppearanceModalOpen}
         onClose={() => setIsAppearanceModalOpen(false)}
         settings={appearanceSettings}
+        onQuickSave={(patch, message) => {
+          setAppearanceSettings((prev) => ({ ...prev, ...patch }));
+          showToast(message);
+        }}
         onSaveSettings={(next) => {
           setAppearanceSettings(next);
           showToast(
