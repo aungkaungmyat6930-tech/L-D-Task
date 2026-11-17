@@ -13,6 +13,7 @@ interface AuditRow {
   item_id: string | null;
   item_label: string | null;
   fields: string[] | null;
+  item_owner?: string | null;
 }
 
 const PAGE_SIZE = 100;
@@ -45,6 +46,7 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
   const [hasMore, setHasMore] = useState(false);
   const [area, setArea] = useState('');
   const [actor, setActor] = useState('');
+  const [owner, setOwner] = useState('');
   const [search, setSearch] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
 
@@ -72,6 +74,7 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
       if (area) q = q.eq('area', area);
       if (actor === '__system') q = q.is('actor_email', null);
       else if (actor) q = q.eq('actor_email', actor);
+      if (owner) q = q.ilike('item_owner', `%${owner.replace(/[%_]/g, '')}%`);
       if (searchApplied) q = q.ilike('item_label', `%${searchApplied.replace(/[%_]/g, '')}%`);
       const { data, error: err } = await q;
       setLoading(false);
@@ -89,14 +92,14 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
       setRows((prev) => (append ? [...prev, ...list] : list));
       setHasMore(list.length === PAGE_SIZE);
     },
-    [area, actor, searchApplied, rows.length, my]
+    [area, actor, owner, searchApplied, rows.length, my]
   );
 
   // Reload from the top whenever a filter changes.
   useEffect(() => {
     load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [area, actor, searchApplied]);
+  }, [area, actor, owner, searchApplied]);
 
   const staffWithEmail = users.filter((u) => u.email);
 
@@ -130,7 +133,7 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           <select
             value={area}
             onChange={(e) => setArea(e.target.value)}
@@ -155,6 +158,19 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
               </option>
             ))}
             <option value="__system">{my ? 'System (အလိုအလျောက်)' : 'System (automatic)'}</option>
+          </select>
+          <select
+            value={owner}
+            onChange={(e) => setOwner(e.target.value)}
+            className="text-xs font-semibold px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-800"
+            title={my ? 'ဘယ်သူ့ Task / ခွင့် စသည်' : "Whose task / leave etc."}
+          >
+            <option value="">{my ? 'ဘယ်သူ့ဟာမဆို' : "Anyone's records"}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.name}>
+                {my ? `${u.name} ၏` : `${u.name}'s`}
+              </option>
+            ))}
           </select>
           <form
             onSubmit={(e) => {
@@ -187,6 +203,7 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
                 <th className="p-3 whitespace-nowrap">{my ? 'အချိန်' : 'When'}</th>
                 <th className="p-3">{my ? 'ပြင်သူ' : 'Who'}</th>
                 <th className="p-3">{my ? 'အပိုင်း' : 'Area'}</th>
+                <th className="p-3">{my ? 'ဘယ်သူ့ဟာ' : 'Whose'}</th>
                 <th className="p-3">{my ? 'လုပ်ဆောင်ချက်' : 'Action'}</th>
                 <th className="p-3">{my ? 'အကြောင်းအရာ' : 'Item'}</th>
                 <th className="p-3">{my ? 'ပြင်ခဲ့သည့်အကွက်' : 'Changed fields'}</th>
@@ -195,7 +212,7 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
             <tbody className="divide-y divide-slate-100">
               {rows.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={7} className="p-8 text-center text-slate-400 italic">
                     {my ? 'မှတ်တမ်း မရှိသေးပါ။' : 'No changes recorded yet.'}
                   </td>
                 </tr>
@@ -222,6 +239,9 @@ export const AuditTab: React.FC<{ users: UserProfile[]; language: Language }> = 
                       </td>
                       <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">
                         {areaLabel ? (my ? areaLabel.my : areaLabel.en) : r.area}
+                      </td>
+                      <td className="p-3 font-semibold text-indigo-800 max-w-[160px] break-words">
+                        {r.item_owner || '—'}
                       </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold ${act.cls}`}>
