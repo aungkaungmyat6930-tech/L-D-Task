@@ -183,9 +183,9 @@ export const Header: React.FC<HeaderProps> = ({
       }
     >
       {/* Top Brand & Workspace Row */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+      <div className="max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 py-5 sm:py-7 lg:py-8 flex flex-wrap items-center justify-between gap-x-8 gap-y-5">
         {/* Brand Zone */}
-        <div className="flex items-center gap-4 sm:gap-5">
+        <div className="flex items-center gap-5 sm:gap-6">
           <div
             onClick={isAnyAdmin ? onOpenAppearanceSettings : undefined}
             title={
@@ -240,7 +240,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {t.subBrand}
               </span>
             </div>
-            <p className="text-sm text-slate-300/90 hidden sm:block mt-1">
+            <p className="text-sm sm:text-base text-slate-300/90 hidden sm:block mt-2">
               {t.portalTagline}
             </p>
           </div>
@@ -286,9 +286,9 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Evenly Spread User & Admin Utility Strip */}
       <div className="border-t border-white/10 bg-black/25">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-[1600px] mx-auto px-5 sm:px-8 lg:px-12 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-4">
           {/* Active User Identity */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-3.5 min-w-0">
             <img
               src={currentUser.avatar}
               alt={currentUser.name}
@@ -327,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Spread-Out Action Buttons */}
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-2.5 flex-1">
+          <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3.5 flex-1">
             {currentUser.roleTier !== 'VIEWER' && (
               <button
                 onClick={onOpenEditProfile}
@@ -454,7 +454,7 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Navigation Tabs Bar */}
       <nav
         ref={navScrollRef}
-        className="nav-scroll border-t border-white/10 px-4 sm:px-6 lg:px-10 overflow-x-auto"
+        className="nav-scroll border-t border-white/10 px-5 sm:px-8 lg:px-12 overflow-x-auto"
         style={
           navbarImageDataUrl
             ? { background: 'rgba(15, 23, 42, 0.35)' }
@@ -463,14 +463,14 @@ export const Header: React.FC<HeaderProps> = ({
               }
         }
       >
-        <div className="max-w-[1600px] mx-auto py-2.5 text-sm w-max min-w-full">
-          <div className="flex flex-nowrap items-center gap-2">
+        <div className="max-w-[1600px] mx-auto py-3 sm:py-4 text-sm w-max min-w-full">
+          <div className="flex flex-nowrap items-center gap-3">
             <button
               onClick={() => onSelectTab('directory')}
               data-active={currentTab === 'directory'}
               style={currentTab === 'directory' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'directory'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -485,7 +485,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'tasks'}
               style={currentTab === 'tasks' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'tasks'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -513,7 +513,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'leave'}
               style={currentTab === 'leave' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'leave'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -533,7 +533,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'training'}
               style={currentTab === 'training' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'training'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -548,7 +548,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'weekly'}
               style={currentTab === 'weekly' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'weekly'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -563,7 +563,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'projects'}
               style={currentTab === 'projects' ? { backgroundColor: accentColor } : undefined}
               data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'projects'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -580,7 +580,7 @@ export const Header: React.FC<HeaderProps> = ({
               data-active={currentTab === 'audit'}
                 style={currentTab === 'audit' ? { backgroundColor: accentColor } : undefined}
                 data-nav-tab
-              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold transition-all whitespace-nowrap ${
                   currentTab === 'audit'
                     ? 'text-white shadow-sm'
                     : 'text-slate-200 hover:text-white hover:bg-white/10'
