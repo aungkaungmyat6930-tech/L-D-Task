@@ -16,6 +16,7 @@ import {
   Lock,
   Palette,
   Bell,
+  History,
   ImagePlus,
   Pencil,
   Camera,
@@ -643,6 +644,22 @@ export const Header: React.FC<HeaderProps> = ({
               <Icon3DProjects className="w-4 h-4 shrink-0" />
               <span>{t.tabProjects}</span>
             </button>
+
+            {/* Audit: change history, Admins and Super Admins only */}
+            {isAnyAdmin && (
+              <button
+                onClick={() => onSelectTab('audit')}
+                style={currentTab === 'audit' ? { backgroundColor: accentColor } : undefined}
+                className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-semibold transition-all whitespace-nowrap ${
+                  currentTab === 'audit'
+                    ? 'text-white shadow-sm'
+                    : 'text-slate-200 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <History className="w-4 h-4 shrink-0 text-amber-300" />
+                <span>Audit</span>
+              </button>
+            )}
           </div>
 
           {/* Admin & Super Admin Direct Nav Bar Image Upload & Edit Controls */}
