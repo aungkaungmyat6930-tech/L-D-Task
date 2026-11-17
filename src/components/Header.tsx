@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { changeOwnPassword } from '../lib/staffLogins';
 import { UserProfile, TabType, AppearanceSettings } from '../types';
 import { Language, TRANSLATIONS } from '../utils/translations';
@@ -92,6 +92,16 @@ export const Header: React.FC<HeaderProps> = ({
   dueSoonTasksCount,
 }) => {
   const [pwOpen, setPwOpen] = useState(false);
+  const navScrollRef = useRef<HTMLElement>(null);
+  // Keep the selected tab visible when the tab row scrolls sideways.
+  useEffect(() => {
+    const nav = navScrollRef.current;
+    const active = nav?.querySelector<HTMLElement>('[data-nav-tab][data-active="true"]');
+    if (nav && active) {
+      const left = active.offsetLeft - nav.clientWidth / 2 + active.clientWidth / 2;
+      nav.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+    }
+  }, [currentTab]);
   const [pwValue, setPwValue] = useState('');
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pwBusy, setPwBusy] = useState(false);
@@ -488,7 +498,8 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Navigation Tabs Bar */}
       <nav
-        className="border-t border-white/10 px-4 sm:px-6 lg:px-10"
+        ref={navScrollRef}
+        className="nav-scroll border-t border-white/10 px-4 sm:px-6 lg:px-10 overflow-x-auto"
         style={
           navbarImageDataUrl
             ? { background: 'rgba(15, 23, 42, 0.35)' }
@@ -497,12 +508,14 @@ export const Header: React.FC<HeaderProps> = ({
               }
         }
       >
-        <div className="max-w-[1600px] mx-auto py-2.5 text-xs sm:text-sm">
-          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-1.5 sm:gap-2">
+        <div className="max-w-[1600px] mx-auto py-2.5 text-sm w-max min-w-full">
+          <div className="flex flex-nowrap items-center gap-2">
             <button
               onClick={() => onSelectTab('directory')}
+              data-active={currentTab === 'directory'}
               style={currentTab === 'directory' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'directory'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -514,8 +527,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onSelectTab('tasks')}
+              data-active={currentTab === 'tasks'}
               style={currentTab === 'tasks' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'tasks'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -540,8 +555,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onSelectTab('leave')}
+              data-active={currentTab === 'leave'}
               style={currentTab === 'leave' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'leave'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -558,8 +575,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onSelectTab('training')}
+              data-active={currentTab === 'training'}
               style={currentTab === 'training' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'training'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -571,8 +590,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onSelectTab('weekly')}
+              data-active={currentTab === 'weekly'}
               style={currentTab === 'weekly' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'weekly'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -584,8 +605,10 @@ export const Header: React.FC<HeaderProps> = ({
 
             <button
               onClick={() => onSelectTab('projects')}
+              data-active={currentTab === 'projects'}
               style={currentTab === 'projects' ? { backgroundColor: accentColor } : undefined}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+              data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                 currentTab === 'projects'
                   ? 'text-white shadow-sm'
                   : 'text-slate-200 hover:text-white hover:bg-white/10'
@@ -599,8 +622,10 @@ export const Header: React.FC<HeaderProps> = ({
             {isAnyAdmin && (
               <button
                 onClick={() => onSelectTab('audit')}
+              data-active={currentTab === 'audit'}
                 style={currentTab === 'audit' ? { backgroundColor: accentColor } : undefined}
-                className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl font-semibold transition-all text-center leading-tight ${
+                data-nav-tab
+              className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all whitespace-nowrap ${
                   currentTab === 'audit'
                     ? 'text-white shadow-sm'
                     : 'text-slate-200 hover:text-white hover:bg-white/10'

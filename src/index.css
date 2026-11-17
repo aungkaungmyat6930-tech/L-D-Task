@@ -194,3 +194,20 @@
     transform: none !important;
   }
 }
+
+/* Header navigation: one row that scrolls sideways when the tabs don't fit */
+.nav-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.nav-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.nav-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 9999px;
+}
+.nav-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
