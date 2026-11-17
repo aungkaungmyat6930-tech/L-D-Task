@@ -20,6 +20,8 @@ interface AppearanceSettingsModalProps {
   onClose: () => void;
   settings: AppearanceSettings;
   onSaveSettings: (next: AppearanceSettings) => void;
+  /** Saves image changes immediately (logo / nav bar), so closing the window never loses them. */
+  onQuickSave?: (patch: Partial<AppearanceSettings>, message: string) => void;
   onResetSettings: () => void;
   language: Language;
 }
@@ -82,6 +84,7 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
   onClose,
   settings,
   onSaveSettings,
+  onQuickSave,
   onResetSettings,
   language,
 }) => {
@@ -121,7 +124,9 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     setNavbarImageDataUrl(settings.navbarImageDataUrl || '');
     setLogoUploadError(null);
     setNavbarUploadError(null);
-  }, [settings, isOpen]);
+    // Only when the window opens: background updates must not wipe an upload in progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -144,6 +149,10 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       const dataUrl = await processLogoImageFile(file, 400);
       setLogoImageDataUrl(dataUrl);
       setLogoType('image');
+      onQuickSave?.(
+        { logoType: 'image', logoImageDataUrl: dataUrl },
+        language === 'my' ? '✅ Portal Logo ကို ပြောင်းပြီး သိမ်းဆည်းပြီးပါပြီ။' : '✅ Portal logo updated and saved.'
+      );
     } catch (err) {
       setLogoUploadError(err instanceof Error ? err.message : 'Failed to upload logo.');
     } finally {
@@ -158,6 +167,10 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
       setNavbarUploadError(null);
       const dataUrl = await processBannerImageFile(file, 1440);
       setNavbarImageDataUrl(dataUrl);
+      onQuickSave?.(
+        { navbarImageDataUrl: dataUrl },
+        language === 'my' ? '✅ Navi Bar ပုံကို တင်ပြီး သိမ်းဆည်းပြီးပါပြီ။' : '✅ Navigation bar image saved.'
+      );
     } catch (err) {
       setNavbarUploadError(err instanceof Error ? err.message : 'Failed to upload navbar image.');
     } finally {
@@ -301,6 +314,10 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
                       onClick={() => {
                         setLogoImageDataUrl('');
                         setLogoType('badge');
+                        onQuickSave?.(
+                          { logoType: 'badge', logoImageDataUrl: undefined },
+                          language === 'my' ? 'Logo ပုံကို ဖယ်ရှားပြီးပါပြီ။' : 'Logo image removed.'
+                        );
                       }}
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition"
                     >
@@ -389,7 +406,13 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
                 {navbarImageDataUrl && (
                   <button
                     type="button"
-                    onClick={() => setNavbarImageDataUrl('')}
+                    onClick={() => {
+                      setNavbarImageDataUrl('');
+                      onQuickSave?.(
+                        { navbarImageDataUrl: undefined },
+                        language === 'my' ? 'Navi Bar ပုံကို ဖယ်ရှားပြီးပါပြီ။' : 'Navigation bar image removed.'
+                      );
+                    }}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
