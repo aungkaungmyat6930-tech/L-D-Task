@@ -1109,25 +1109,16 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/65 backdrop-blur-sm animate-fadeIn">
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden flex flex-col max-h-[92vh]">
-              <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded">
-                      Strategic Project · Excel Overview
-                    </span>
-                    <span className="text-[11px] text-emerald-300 font-semibold">
-                      {getStageLabelMy(detailProject.status)} ({dProgress}%)
-                    </span>
-                    {!isViewer && (
-                      <span className="text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30 px-2 py-0.5 rounded">
-                        {language === 'my' ? 'Edit ခွင့်ပြုထားသည်' : 'Editing Unlocked'}
-                      </span>
+              <div className="bg-slate-900 text-white px-6 py-5 border-b border-slate-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg sm:text-xl font-extrabold text-white leading-snug">
+                      {detailProject.title}
+                    </h3>
+                    {detailProject.deliverables && (
+                      <p className="text-sm text-slate-300 mt-1 line-clamp-2">{detailProject.deliverables}</p>
                     )}
                   </div>
-                  <h3 className="text-base font-extrabold text-white mt-1 truncate">
-                    {detailProject.title}
-                  </h3>
-                </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {!isViewer && (
                     <button
@@ -1146,166 +1137,53 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <X className="w-5 h-5" />
                   </button>
                 </div>
+                </div>
+
+                {/* Key facts */}
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-bold ${
+                      detailProject.status === 'Completed'
+                        ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/40'
+                        : detailProject.status === 'Final Review'
+                        ? 'bg-purple-500/20 text-purple-200 border border-purple-400/40'
+                        : 'bg-blue-500/20 text-blue-200 border border-blue-400/40'
+                    }`}
+                  >
+                    {detailProject.status} · {dProgress}%
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-slate-100">
+                    {projectOwnerUser?.avatar && (
+                      <img src={projectOwnerUser.avatar} alt="" referrerPolicy="no-referrer" className="w-4 h-4 rounded-full object-cover" />
+                    )}
+                    <span className="text-slate-400">{language === 'my' ? 'တာဝန်ခံ' : 'Owner'}:</span>
+                    <span className="font-semibold">{detailProject.ownerName}</span>
+                  </span>
+                  {(detailProject.coAssigneeNames?.length ?? 0) > 0 && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-slate-100">
+                      <span className="text-slate-400">{language === 'my' ? 'တွဲဖက်' : 'Co'}:</span>
+                      <span className="font-semibold">{detailProject.coAssigneeNames!.join(', ')}</span>
+                    </span>
+                  )}
+                  {detailProject.deadline && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-slate-100">
+                      <span className="text-slate-400">Deadline:</span>
+                      <span className="font-semibold tabular-nums">{detailProject.deadline}</span>
+                    </span>
+                  )}
+                  {detailProject.followupDate && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-slate-100">
+                      <span className="text-slate-400">Follow-up:</span>
+                      <span className="font-semibold tabular-nums">{detailProject.followupDate}</span>
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="p-5 space-y-5 overflow-y-auto">
-                {/* 1. Excel-Style Project Overview Summary Sheet */}
-                <div className="border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
-                  <div className="bg-emerald-800 text-white px-3.5 py-2 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-extrabold tracking-wide uppercase">
-                      {language === 'my'
-                        ? 'Project အနှစ်ချုပ်ဇယား (Excel Overview)'
-                        : 'Project Summary Sheet (Excel Overview)'}
-                    </span>
-                    <span className="text-[11px] text-emerald-100 font-semibold tabular-nums">
-                      {dCompleted} / {dTasks.length} {language === 'my' ? 'Task ပြီးစီး' : 'Tasks Completed'} ({dProgress}%)
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-slate-100 text-slate-700 font-bold text-[11px] uppercase">
-                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[200px]">
-                            Title
-                          </th>
-                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[140px]">
-                            Assigner
-                          </th>
-                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[150px]">
-                            Co-Assigner
-                          </th>
-                          <th className="border border-slate-300 px-3 py-2 text-left whitespace-nowrap">
-                            Deadline
-                          </th>
-                          <th className="border border-slate-300 px-3 py-2 text-left whitespace-nowrap">
-                            Follow-up
-                          </th>
-                          <th className="border border-slate-300 px-3 py-2 text-left min-w-[170px]">
-                            {language === 'my' ? 'လုပ်နေတဲ့အဆင့် (Stage)' : 'Current Stage'}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-white">
-                          <td className="border border-slate-300 px-3 py-2.5 align-top">
-                            <div className="font-extrabold text-slate-900">{detailProject.title}</div>
-                            {detailProject.deliverables && (
-                              <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                                {detailProject.deliverables}
-                              </div>
-                            )}
-                            {detailProject.followupNote && (
-                              <div className="text-[10px] text-indigo-700 font-semibold mt-1">
-                                Note: {detailProject.followupNote}
-                              </div>
-                            )}
-                          </td>
-                          <td className="border border-slate-300 px-3 py-2.5 align-top">
-                            <button
-                              type="button"
-                              onClick={() => projectOwnerUser && onOpenMemberSheet(projectOwnerUser)}
-                              className="inline-flex items-center gap-1.5 font-bold text-slate-900 hover:text-blue-600 hover:underline text-left"
-                            >
-                              {projectOwnerUser && (
-                                <img
-                                  src={projectOwnerUser.avatar}
-                                  alt={detailProject.ownerName}
-                                  referrerPolicy="no-referrer"
-                                  className="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0"
-                                />
-                              )}
-                              <span>{detailProject.ownerName}</span>
-                            </button>
-                          </td>
-                          <td className="border border-slate-300 px-3 py-2.5 align-top font-semibold text-indigo-800">
-                            {detailProject.coAssigneeNames && detailProject.coAssigneeNames.length > 0
-                              ? detailProject.coAssigneeNames.join(', ')
-                              : '-'}
-                          </td>
-                          <td className="border border-slate-300 px-3 py-2.5 align-top tabular-nums whitespace-nowrap">
-                            {canSetupDeadline ? (
-                              <input
-                                type="date"
-                                value={detailProject.deadline}
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    onUpdateProject({ ...detailProject, deadline: e.target.value });
-                                  }
-                                }}
-                                className="text-xs font-bold border border-slate-300 rounded px-2 py-1 text-slate-900 bg-slate-50"
-                              />
-                            ) : (
-                              <span className="font-bold text-slate-900">{detailProject.deadline}</span>
-                            )}
-                          </td>
-                          <td className="border border-slate-300 px-3 py-2.5 align-top tabular-nums whitespace-nowrap">
-                            {!isViewer ? (
-                              <input
-                                type="date"
-                                value={detailProject.followupDate || todayStr}
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    onUpdateProject({ ...detailProject, followupDate: e.target.value });
-                                  }
-                                }}
-                                className="text-xs font-bold border border-indigo-200 bg-indigo-50/50 rounded px-2 py-1 text-indigo-900"
-                              />
-                            ) : (
-                              <span className="font-bold text-indigo-800">
-                                {detailProject.followupDate || '-'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="border border-slate-300 px-3 py-2.5 align-top">
-                            {!isViewer ? (
-                              <select
-                                value={detailProject.status}
-                                onChange={(e) => {
-                                  const nextSt = e.target.value as StrategicProject['status'];
-                                  if (nextSt === 'Completed' && !isAdmin) {
-                                    onRequestProjectCompletion(detailProject.id);
-                                    return;
-                                  }
-                                  onUpdateProject({
-                                    ...detailProject,
-                                    status: nextSt,
-                                    progress: nextSt === 'Completed' ? 100 : detailProject.progress,
-                                  });
-                                }}
-                                className={`w-full text-xs font-extrabold px-2 py-1 rounded-lg border cursor-pointer focus:outline-none ${
-                                  detailProject.status === 'Completed'
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                    : detailProject.status === 'Final Review'
-                                    ? 'bg-purple-50 text-purple-800 border-purple-300'
-                                    : detailProject.status === 'On Track'
-                                    ? 'bg-sky-50 text-sky-800 border-sky-300'
-                                    : 'bg-blue-50 text-blue-800 border-blue-300'
-                                }`}
-                              >
-                                {PROJECT_STAGES.map((st) => (
-                                  <option key={st} value={st}>
-                                    {st === 'Completed' && !isAdmin
-                                      ? language === 'my'
-                                        ? 'Completed (Approval တောင်းရန်)'
-                                        : 'Completed (Request Approval)'
-                                      : `${st} — ${getStageLabelMy(st)}`}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span className="font-bold text-slate-800">
-                                {detailProject.status} ({getStageLabelMy(detailProject.status)})
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Interactive 4-Stage Roadmap Strip */}
-                  <div className="bg-slate-50 border-t border-slate-300 px-3.5 py-2.5">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="p-6 space-y-6 overflow-y-auto bg-slate-50">
+                {/* Project stage (click to change) */}
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {PROJECT_STAGES.map((st, idx) => {
                         const active = idx <= dStageIdx;
                         return (
@@ -1354,11 +1232,10 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                         );
                       })}
                     </div>
-                  </div>
                 </div>
 
                 {/* Project Completion Approval Bar (Member Request + Admin/Super Admin Approve / Pending / Reject) */}
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
                   <div className="space-y-0.5">
                     <div className="flex flex-wrap items-center gap-2 text-xs font-extrabold text-slate-900">
                       <ShieldCheck className="w-4 h-4 text-purple-600" />
@@ -1466,16 +1343,11 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                 <div className="space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h4 className="text-xs font-extrabold text-slate-900">
+                      <h4 className="text-sm font-extrabold text-slate-900">
                         {language === 'my'
-                          ? `လုပ်ငန်းခွဲများ အသေးစိတ် Excel ဇယား — Task Overview (${visibleDetailTasks.length})`
-                          : `Project Tasks Excel Overview (${visibleDetailTasks.length})`}
+                          ? `လုပ်ငန်းခွဲများ (${visibleDetailTasks.length})`
+                          : `Project Tasks (${visibleDetailTasks.length})`}
                       </h4>
-                      <p className="text-[11px] text-slate-500">
-                        {language === 'my'
-                          ? 'Title, Assigner, Co-Assigner, Deadline နှင့် လုပ်နေတဲ့အဆင့် (Stage) များကို Excel ဇယားကဲ့သို့ ရှင်းလင်းစွာ ကြည့်ရှုပြင်ဆင်နိုင်ပါသည်'
-                          : 'Clear spreadsheet-style overview of Title, Assigner, Co-Assigner, Deadline, Follow-up, and Current Stage'}
-                      </p>
                     </div>
                     {!isViewer && (
                       <button
@@ -1536,29 +1408,29 @@ export const ProjectsTab: React.FC<ProjectsTabProps> = ({
                     <div className="border border-slate-300 rounded-xl overflow-x-auto shadow-2xs">
                       <table className="w-full border-collapse text-xs">
                         <thead>
-                          <tr className="bg-slate-800 text-white text-[11px] font-bold uppercase tracking-wide">
-                            <th className="border border-slate-600 px-2.5 py-2.5 text-center w-9">
+                          <tr className="bg-slate-100 text-slate-600 text-[11px] font-bold uppercase tracking-wide">
+                            <th className="border-b border-slate-200 px-2.5 py-2.5 text-center w-9">
                               #
                             </th>
-                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[210px]">
+                            <th className="border-b border-slate-200 px-3 py-2.5 text-left min-w-[210px]">
                               Title
                             </th>
-                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[140px]">
+                            <th className="border-b border-slate-200 px-3 py-2.5 text-left min-w-[140px]">
                               Assigner
                             </th>
-                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[130px]">
+                            <th className="border-b border-slate-200 px-3 py-2.5 text-left min-w-[130px]">
                               Co-Assigner
                             </th>
-                            <th className="border border-slate-600 px-2.5 py-2.5 text-left whitespace-nowrap">
+                            <th className="border-b border-slate-200 px-2.5 py-2.5 text-left whitespace-nowrap">
                               Deadline
                             </th>
-                            <th className="border border-slate-600 px-2.5 py-2.5 text-left whitespace-nowrap">
+                            <th className="border-b border-slate-200 px-2.5 py-2.5 text-left whitespace-nowrap">
                               Follow-up
                             </th>
-                            <th className="border border-slate-600 px-3 py-2.5 text-left min-w-[155px]">
+                            <th className="border-b border-slate-200 px-3 py-2.5 text-left min-w-[155px]">
                               {language === 'my' ? 'လုပ်နေတဲ့အဆင့်' : 'Current Stage'}
                             </th>
-                            <th className="border border-slate-600 px-2.5 py-2.5 text-center whitespace-nowrap">
+                            <th className="border-b border-slate-200 px-2.5 py-2.5 text-center whitespace-nowrap">
                               Actions
                             </th>
                           </tr>
