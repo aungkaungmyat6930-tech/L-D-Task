@@ -138,8 +138,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
       );
       return;
     }
-    const needsPassword = isAdminOrSuper(roleTier);
-    if (staffLoginsEnabled && needsPassword && loginPassword.length < 6) {
+    // Everyone signs in with email + a temporary password given here (changed on first sign-in).
+    if (staffLoginsEnabled && loginPassword.length < 6) {
       setEmailError(
         language === 'my'
           ? 'Login Password သည် အနည်းဆုံး စာလုံး ၆ လုံး ရှိရပါမည်။'
@@ -172,39 +172,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     setLoginPassword('');
     setActiveTab('offboard');
 
-    // Members/Viewers sign in with just their email; create their login account now so it
-    // shows in Supabase (Authentication -> Users) straight away.
-    if (staffLoginsEnabled && !needsPassword) {
-      setLoginBusy(true);
-      setLoginNotice({
-        ok: true,
-        text: language === 'my' ? `${staffName} ကို Supabase ထဲ ထည့်နေသည်...` : `Adding ${staffName} to Supabase...`,
-      });
-      manageStaffLogin('ensure_login', cleanEmail).then((res) => {
-        setLoginBusy(false);
-        setLoginNotice(
-          res.ok
-            ? {
-                ok: true,
-                text:
-                  language === 'my'
-                    ? `✅ ${staffName} ကို ထည့်ပြီး Supabase နှင့် Sync ဖြစ်ပါပြီ။ Password မလိုဘဲ ${cleanEmail} ဖြင့် ဝင်ရောက်နိုင်ပါသည်။`
-                    : `✅ ${staffName} added and synced to Supabase. They can sign in with just ${cleanEmail}.`,
-              }
-            : {
-                ok: false,
-                text:
-                  (language === 'my'
-                    ? `⚠️ ${staffName} ကို စာရင်းသွင်းပြီးပါပြီ (ပထမဆုံး ဝင်ချိန်တွင် Login ဖန်တီးပါမည်)။ Supabase Login ဖန်တီးရာတွင် ပြဿနာ: `
-                    : `⚠️ ${staffName} was added (their login will be created on first sign-in), but creating it now failed: `) +
-                  res.error,
-              }
-        );
-      });
-    }
-
-    // Admins need a password: create their login straight away (Supabase Edge Function, admin only).
-    if (staffLoginsEnabled && needsPassword) {
+    // Create their login with the temporary password straight away (Supabase Edge Function, admin only).
+    if (staffLoginsEnabled) {
       setLoginBusy(true);
       setLoginNotice({
         ok: true,
@@ -218,8 +187,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 ok: true,
                 text:
                   language === 'my'
-                    ? `✅ ${staffName} ၏ Login ဖန်တီးပြီးပါပြီ။ Email: ${cleanEmail} နှင့် သတ်မှတ်ထားသော Password ဖြင့် ဝင်ရောက်နိုင်ပါသည်။`
-                    : `✅ Login created for ${staffName}. They can sign in now with ${cleanEmail} and the password you set.`,
+                    ? `✅ ${staffName} ၏ Login ဖန်တီးပြီးပါပြီ။ Email (${cleanEmail}) နှင့် ယာယီ Password ကို ${staffName} ထံ ပေးပါ။ ပထမဆုံး ဝင်ချိန်တွင် ကိုယ်ပိုင် Password အသစ် ပြောင်းခိုင်းပါမည်။`
+                    : `✅ Login created for ${staffName}. Give them ${cleanEmail} and the temporary password; they'll be asked to choose their own on first sign-in.`,
               }
             : {
                 ok: false,
@@ -284,8 +253,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
         ok: true,
         text:
           language === 'my'
-            ? `✅ ${user.name} ၏ Password ကို သတ်မှတ်ပြီးပါပြီ။`
-            : `✅ Password set for ${user.name}. They can sign in with ${user.email}.`,
+            ? `✅ ${user.name} ၏ ယာယီ Password အသစ် သတ်မှတ်ပြီးပါပြီ။ ${user.email} နှင့် ဤ Password ကို ပေးပါ။ ဝင်ချိန်တွင် ကိုယ်ပိုင် Password ပြောင်းခိုင်းပါမည်။`
+            : `✅ New temporary password set for ${user.name}. Give them ${user.email} and this password; they'll choose their own on sign-in.`,
       });
     } else {
       setLoginNotice({ ok: false, text: `⚠️ ${res.error}` });
@@ -542,19 +511,11 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
               </div>
             </div>
 
-            {staffLoginsEnabled && !isAdminOrSuper(roleTier) && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[11px] font-semibold text-emerald-800">
-                {language === 'my'
-                  ? '✅ ဤဝန်ထမ်းသည် Password မလိုဘဲ Email ဖြင့်သာ ဝင်ရောက်နိုင်ပါမည်။'
-                  : '✅ This staff member signs in with just their email, no password.'}
-              </div>
-            )}
-
-            {staffLoginsEnabled && isAdminOrSuper(roleTier) && (
+            {staffLoginsEnabled && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                 <label className="block text-xs font-bold text-blue-900 mb-1">
                   <KeyRound className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
-                  {language === 'my' ? 'Admin Login Password (Admin များအတွက်သာ)' : 'Admin login password (admins only)'}{' '}
+                  {language === 'my' ? 'ယာယီ Login Password (Temporary)' : 'Temporary login password'}{' '}
                   <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -569,8 +530,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 />
                 <p className="mt-1 text-[11px] text-blue-800">
                   {language === 'my'
-                    ? 'Admin များသည် လုံခြုံရေးအတွက် Password ဖြင့် ဝင်ရပါမည်။ သိမ်းလိုက်သည်နှင့် Login ဖန်တီးပါမည်။ ဝင်ပြီးနောက် "Password" ခလုတ်ဖြင့် ပြောင်းနိုင်ပါသည်။'
-                    : 'Admins sign in with a password for security. The login is created when you save; they can change it later with the "Password" button.'}
+                    ? 'သိမ်းလိုက်သည်နှင့် Login ဖန်တီးပါမည်။ Email နှင့် ဤယာယီ Password ကို ဝန်ထမ်းထံ ပေးပါ။ ပထမဆုံး ဝင်ချိန်တွင် ကိုယ်ပိုင် Password အသစ် ပြောင်းရပါမည်။'
+                    : 'The login is created when you save. Give the staff member their email and this temporary password; they must choose their own password on first sign-in.'}
                 </p>
               </div>
             )}
@@ -781,18 +742,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                 onChange={(e) => {
                                   const newRole = e.target.value as RoleTier;
                                   onUpdateUserRole(user.id, newRole);
-                                  // Admins sign in with a password: ask for one when promoting.
-                                  if (staffLoginsEnabled && user.email && isAdminOrSuper(newRole) && !isAdminOrSuper(user.roleTier)) {
-                                    setPwEditUserId(user.id);
-                                    setPwEditValue('');
-                                    setLoginNotice({
-                                      ok: true,
-                                      text:
-                                        language === 'my'
-                                          ? `🔑 ${user.name} သည် Admin ဖြစ်သွားပြီဖြစ်၍ Password ဖြင့် ဝင်ရပါမည်။ အောက်တွင် Password သတ်မှတ်ပေးပါ။`
-                                          : `🔑 ${user.name} is now an admin and must sign in with a password. Set one below.`,
-                                    });
-                                  }
                                 }}
                                 className="mt-1 text-[10px] font-bold px-1.5 py-0.5 border border-purple-300 bg-purple-50 text-purple-900 rounded focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
                               >
@@ -859,7 +808,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                               )}
 
                               {/* Set / reset login password */}
-                              {staffLoginsEnabled && user.email && !isResigned && isAdminOrSuper(user.roleTier) && (
+                              {staffLoginsEnabled && user.email && !isResigned && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -871,7 +820,7 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                                       ? 'text-blue-700 bg-blue-100'
                                       : 'text-slate-600 hover:text-blue-600 hover:bg-blue-50'
                                   }`}
-                                  title={language === 'my' ? 'Login Password သတ်မှတ်ရန်' : 'Set login password'}
+                                  title={language === 'my' ? 'ယာယီ Password အသစ် ပေးရန် (Password မေ့သွားလျှင်)' : 'Give a new temporary password (if forgotten)'}
                                 >
                                   <KeyRound className="w-3.5 h-3.5" />
                                 </button>

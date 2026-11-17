@@ -36,41 +36,9 @@ export async function manageStaffLogin(
 /** Lets the signed-in person change their own password. */
 export async function changeOwnPassword(password: string): Promise<string | null> {
   if (!supabase) return 'Supabase is not configured.';
-  const { error } = await supabase.auth.updateUser({ password });
+  // Also clears the "temporary password" flag set when an admin gave out the password.
+  const { error } = await supabase.auth.updateUser({ password, data: { must_change_password: false } });
   return error ? error.message : null;
-}
-
-export type EmailLoginResult =
-  | { kind: 'signed-in' }
-  | { kind: 'needs-password' }
-  | { kind: 'unavailable' } // helper not deployed: fall back to password sign-in
-  | { kind: 'error'; message: string };
-
-/** Member/Viewer sign-in with just their email (via the staff-admin Edge Function). */
-export async function emailLogin(email: string): Promise<EmailLoginResult> {
-  if (!supabase) return { kind: 'unavailable' };
-  const { data, error } = await supabase.functions.invoke('staff-admin', {
-    body: { action: 'email_login', email: email.trim().toLowerCase() },
-  });
-  if (error) {
-    let message = error.message;
-    let status = 0;
-    try {
-      const ctx = (error as { context?: Response }).context;
-      if (ctx) {
-        status = ctx.status;
-        const body = await ctx.json();
-        if (body?.error) message = body.error;
-      }
-    } catch {}
-    if (!status || status === 404 && !/staff list/i.test(message)) return { kind: 'unavailable' };
-    return { kind: 'error', message };
-  }
-  if (data?.needsPassword) return { kind: 'needs-password' };
-  if (!data?.token_hash) return { kind: 'error', message: data?.error ?? 'Could not sign in.' };
-  const { error: otpError } = await supabase.auth.verifyOtp({ token_hash: data.token_hash, type: 'magiclink' });
-  if (otpError) return { kind: 'error', message: otpError.message };
-  return { kind: 'signed-in' };
 }
 
 export type OverdueEmailResult =
