@@ -563,42 +563,18 @@ export default function App({ authEmail, onSignOut, onSwitchAccount, guest, onSi
     const found = users.find((u) => u.id === userId);
     if (!found) return;
 
-    // Only a signed-in Super Admin may act as a Super Admin (leave approval is Super Admin only).
-    if (authEmail && found.roleTier === 'SUPER_ADMIN' && authProfile?.roleTier !== 'SUPER_ADMIN') {
-      showToast(
-        language === 'my'
-          ? 'Super Admin အဖြစ် ပြောင်း၍ မရပါ။ ခွင့်ခွင့်ပြုခြင်းကို Super Admin ကိုယ်တိုင်သာ ပြုလုပ်နိုင်ပါသည်။'
-          : "You can't act as a Super Admin. Only Super Admins can approve leave."
-      );
-      return;
-    }
-
-    // Signed in: back to your own account needs no password; another admin's account
-    // needs that person's own sign-in (login form), not the old shared admin password.
-    if (authEmail && authProfile) {
-      if (found.id === authProfile.id) {
-        if (isAdminOrSuper(found.roleTier)) {
-          setIsAdminUnlocked(true);
-          try {
-            sessionStorage.setItem(SESSION_ADMIN_UNLOCKED, 'true');
-          } catch {}
-        }
-        setCurrentUser(found);
+    // Signed in: going (back) into any admin account, your own included, always needs that
+    // account's password on the login form, so a locked or member view can't be taken over.
+    if (authEmail && isAdminOrSuper(found.roleTier)) {
+      if (found.id === currentUser.id) return;
+      if (found.email && onSwitchAccount) onSwitchAccount(found.email);
+      else
         showToast(
-          language === 'my' ? `ကိုယ်ပိုင်အကောင့် (${found.name}) သို့ ပြန်ပြောင်းပြီးပါပြီ။` : `Back to your own account (${found.name}).`
+          language === 'my'
+            ? `${found.name} အဖြစ် ဝင်ရန် ၎င်း၏ Email နှင့် Password ဖြင့် Login ဝင်ပါ။`
+            : `Sign in with ${found.name}'s own email and password to use their account.`
         );
-        return;
-      }
-      if (isAdminOrSuper(found.roleTier)) {
-        if (found.email && onSwitchAccount) onSwitchAccount(found.email);
-        else
-          showToast(
-            language === 'my'
-              ? `${found.name} အဖြစ် ဝင်ရန် ၎င်း၏ Email နှင့် Password ဖြင့် Login ဝင်ပါ။`
-              : `Sign in with ${found.name}'s own email and password to use their account.`
-          );
-        return;
-      }
+      return;
     }
 
     // Visitors: admin accounts need a real sign-in with email and password.
